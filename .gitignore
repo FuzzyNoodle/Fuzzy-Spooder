@@ -8,6 +8,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+extensions.json
+main.cpp 
 
 # Arduino and visual micro related files
 *.sln
