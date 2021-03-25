@@ -39,9 +39,10 @@ class WEIGHT_ESTIMATOR {
 public:
   WEIGHT_ESTIMATOR(void);
   void begin(void);
-  
+  void update(void);
 private:
-  
+  uint32_t blink_timer;
+  const uint32_t BLINK_PEROID = 1000;
 };
 
 #endif  //#ifndef WEIGHT_ESTIMATOR_H
