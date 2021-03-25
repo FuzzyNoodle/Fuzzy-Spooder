@@ -10,6 +10,7 @@
 .vscode/ipch
 extensions.json
 main.cpp 
+*.tar.gz
 
 # Arduino and visual micro related files
 *.sln
