@@ -42,7 +42,7 @@ public:
   void update(void);
 private:
   uint32_t blink_timer;
-  const uint32_t BLINK_PEROID = 1000;
+  const uint32_t BLINK_PEROID = 200;
 };
 
 #endif  //#ifndef WEIGHT_ESTIMATOR_H
