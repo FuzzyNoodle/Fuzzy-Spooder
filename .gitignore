@@ -12,6 +12,8 @@ extensions.json
 main.cpp 
 *.tar.gz
 examples/*
+*.py
+Blink.cpp
 
 # Arduino and visual micro related files
 *.sln
