@@ -1,29 +1,70 @@
-
 /*
-Blink Example to test platformio, github and library dependency
+Rotary Example Testing library dependency
 
- PlatformIO 
-Copy and paste this section of configuration code into platform.ini
-[envnodemcuv2]
-platform = espressif8266
-board = nodemcuv2
-framework = arduino
-monitor_speed = 115200
-monitor_filters = send_on_enter
 */
 
-#include "Weight_Estimator.h"
+#include "ESPRotary.h"
+#include "Button2.h"
 
-WEIGHT_ESTIMATOR b;
+#define ROTARY_PIN_CLK D3
+#define ROTARY_PIN_DT D4
+#define CLICKS_PER_STEP 4
+#define BUTTON_PIN D0
 
+ESPRotary rotary = ESPRotary(ROTARY_PIN_DT, ROTARY_PIN_CLK, CLICKS_PER_STEP);
+Button2 button = Button2(BUTTON_PIN);
+
+// on change
+void rotate(ESPRotary &rotary)
+{
+  Serial.println(rotary.getPosition());
+}
+
+// on left or right rotattion
+void showDirection(ESPRotary &rotary)
+{
+  Serial.println(rotary.directionToString(rotary.getDirection()));
+}
+
+void handler(Button2 &btn)
+{
+  switch (btn.getClickType())
+  {
+  case SINGLE_CLICK:
+    break;
+  case DOUBLE_CLICK:
+    Serial.print("double ");
+    break;
+  case TRIPLE_CLICK:
+    Serial.print("triple ");
+    break;
+  case LONG_CLICK:
+    Serial.print("long");
+    break;
+  }
+  Serial.print("click");
+  Serial.print(" (");
+  Serial.print(btn.getNumberOfClicks());
+  Serial.println(")");
+}
 void setup()
 {
-  b.begin();
   Serial.begin(115200);
-  Serial.println("Filament Estimator Example started.");
+  delay(50);
+  Serial.println("\n\nSimple Counter");
+
+  rotary.setChangedHandler(rotate);
+  rotary.setLeftRotationHandler(showDirection);
+  rotary.setRightRotationHandler(showDirection);
+
+  button.setClickHandler(handler);
+  button.setLongClickHandler(handler);
+  button.setDoubleClickHandler(handler);
+  button.setTripleClickHandler(handler);
 }
 
 void loop()
 {
-  b.update();
+  rotary.loop();
+  button.loop();
 }
