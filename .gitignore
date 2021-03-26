@@ -14,6 +14,7 @@ main.cpp
 *.py
 *_Example.cpp
 platformio.ini 
+include/
 
 # Arduino and visual micro related files
 *.sln
