@@ -13,6 +13,7 @@ main.cpp
 *.tar.gz
 *.py
 *_Example.cpp
+platformio.ini 
 
 # Arduino and visual micro related files
 *.sln
