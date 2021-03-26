@@ -11,6 +11,7 @@
 extensions.json
 main.cpp 
 *.tar.gz
+examples/*
 
 # Arduino and visual micro related files
 *.sln

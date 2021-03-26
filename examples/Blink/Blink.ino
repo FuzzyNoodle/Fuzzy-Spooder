@@ -1,5 +1,16 @@
 /*
-  Blink Example to test platformio, github and library dependency
+
+Blink Example to test platformio, github and library dependency
+
+*** PlatformIO ***
+Copy and paste this section of configuration code into platform.ini:
+[env:nodemcuv2]
+platform = espressif8266
+board = nodemcuv2
+framework = arduino
+monitor_speed = 115200
+monitor_filters = send_on_enter
+
 */
 #include <Arduino.h>
 #include "Weight_Estimator.h"
@@ -8,10 +19,10 @@ WEIGHT_ESTIMATOR b;
 
 void setup()
 {
-    b.begin();
+  b.begin();
 }
 
 void loop()
 {
-    b.update();
+  b.update();
 }
