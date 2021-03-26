@@ -12,7 +12,7 @@ monitor_speed = 115200
 monitor_filters = send_on_enter
 
 */
-#include <Arduino.h>
+
 #include "Weight_Estimator.h"
 
 WEIGHT_ESTIMATOR b;
