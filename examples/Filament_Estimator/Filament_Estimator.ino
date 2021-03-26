@@ -10,7 +10,6 @@ board = nodemcuv2
 framework = arduino
 monitor_speed = 115200
 monitor_filters = send_on_enter
-
 */
 
 #include "Weight_Estimator.h"
@@ -21,7 +20,7 @@ void setup()
 {
   b.begin();
   Serial.begin(115200);
-  Serial.println("Blink Example started.");
+  Serial.println("Filament Estimator Example started.");
 }
 
 void loop()
