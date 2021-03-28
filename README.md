@@ -1,7 +1,7 @@
 ## Important Notice
 This library is work in progress, not ready for usage. It is registered in PlatformIO library manger for development purpose only.
 
-# Fuzzy-Filament-Autochanger
+# Fuzzy-Spooder
 An add-on filament autochanger for existing 3D printers, in duel-spool configuration.
 
 ## Development Stages and Features
