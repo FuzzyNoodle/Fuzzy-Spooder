@@ -14,7 +14,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 1. [Install](https://arduino-esp8266.readthedocs.io/en/latest/installing.html) the ESP8266 Arduino Core.
 1. Arduino IDE->Tools->Board->ESP8266 Boards, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
 1. Download and [install](https://www.arduino.cc/en/Guide/Libraries) the [Fuzzy-Spooder](https://github.com/FuzzyNoodle/Fuzzy-Spooder) library.
-1. Individually install the library dependencies using the the Arduino [Library Manager]:
+1. Individually install the following library dependencies using the the Arduino [Library Manager](https://www.arduino.cc/en/guide/libraries#toc3):
     1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.4.2
     1. [Button2](https://github.com/LennartHennigs/Button2) by Lennart Hennigs, version 1.6.1
     1. [Blynk](https://github.com/blynkkk/blynk-library) by Volodymyr Shymanskyy, version 0.6.1
