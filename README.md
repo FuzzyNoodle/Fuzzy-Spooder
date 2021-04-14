@@ -15,11 +15,11 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 1. Arduino IDE->Tools->Board->ESP8266 Boards, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
 1. Download and [install](https://www.arduino.cc/en/Guide/Libraries) the [Fuzzy-Spooder](https://github.com/FuzzyNoodle/Fuzzy-Spooder) library.
 1. Individually install the library dependencies using the the Arduino [Library Manager]:
-    1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.4.2
-    1. [Button2](https://github.com/LennartHennigs/Button2) by Lennart Hennigs, version 1.6.1
-    1. [Blynk](https://github.com/blynkkk/blynk-library) by Volodymyr Shymanskyy, version 0.6.1
-    1. [ESP8266 and ESP32 OLED driver for SSD1306 displays](https://github.com/ThingPulse/esp8266-oled-ssd1306) by ThingPulse, Fabrice Weinberg, version 4.2.0
-    1. [HX711_ADC](https://github.com/olkal/HX711_ADC) by Oolav Kallhovd, version 1.2.7
+  1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.4.2
+  1. [Button2](https://github.com/LennartHennigs/Button2) by Lennart Hennigs, version 1.6.1
+  1. [Blynk](https://github.com/blynkkk/blynk-library) by Volodymyr Shymanskyy, version 0.6.1
+  1. [ESP8266 and ESP32 OLED driver for SSD1306 displays](https://github.com/ThingPulse/esp8266-oled-ssd1306) by ThingPulse, Fabrice Weinberg, version 4.2.0
+  1. [HX711_ADC](https://github.com/olkal/HX711_ADC) by Oolav Kallhovd, version 1.2.7
 5. Open the File->Examples->Fuzzy Spooder->NoWifi_Demo sketch and upload to your board via USB connection.
 6. Calibrate the sensors for the first time.
 
