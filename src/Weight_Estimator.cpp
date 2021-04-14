@@ -176,6 +176,15 @@ void WEIGHT_ESTIMATOR::buttonHandler(Button2 &btn)
             case MENU_CALIBRATE:
                 setPage(PAGE_CALIBRATE);
                 break;
+            case MENU_DISPLAY_EEPROM:
+                uint8_t value;
+                for (uint16_t addr = 0; addr < 64; addr++)
+                {
+                    EEPROM.get(addr, value);
+                    Serial.print(value);
+                    Serial.print(" ");
+                }
+                break;
             }
 
             break;
@@ -229,8 +238,10 @@ void WEIGHT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case CALIBRATE_OK:
                 calibrateEditDigitMode = false;
+                //Reset the selection to the fourth digit, for next entry
+                calibrateSelection = CALIBRATE_4_DIGIT;
                 calibrate();
-                setPage(PAGE_CALIBRATE_OK);
+                setPage(PAGE_CALIBRATE_CONFIRM);
                 break;
             case CALIBRATE_CANCEL:
                 calibrateEditDigitMode = false;
@@ -240,8 +251,20 @@ void WEIGHT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             }
             break;
-        case PAGE_CALIBRATE_OK:
+        case PAGE_CALIBRATE_CONFIRM:
         {
+            switch (calibrateSaveSelection)
+            {
+            case CALIBRATE_SAVE_OK:
+                calibrateValue = newCalibrationValue;
+                EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
+                EEPROM.commit();
+                break;
+            case CALIBRATE_SAVE_CANCEL:
+                //Reset the selection to ok
+                calibrateSaveSelection = CALIBRATE_SAVE_OK;
+                break;
+            }
             setPage(PAGE_MENU);
             break;
         }
@@ -356,12 +379,12 @@ void WEIGHT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             }
         }
         break;
-        case PAGE_CALIBRATE_OK:
+        case PAGE_CALIBRATE_CONFIRM:
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_CANCEL:
                 calibrateSaveSelection = CALIBRATE_SAVE_OK;
-                displayPage(PAGE_CALIBRATE_OK);
+                displayPage(PAGE_CALIBRATE_CONFIRM);
                 break;
             }
             break;
@@ -382,7 +405,7 @@ void WEIGHT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             if (menuIndex < (numberOfMenuItems - 1))
             {
                 menuIndex++;
-                if (menuIndex >= menuItemPerPage)
+                if (menuIndex >= menuItemStartIndex + menuItemPerPage)
                 {
                     menuItemStartIndex++;
                 }
@@ -450,12 +473,12 @@ void WEIGHT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
-        case PAGE_CALIBRATE_OK:
+        case PAGE_CALIBRATE_CONFIRM:
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_OK:
                 calibrateSaveSelection = CALIBRATE_SAVE_CANCEL;
-                displayPage(PAGE_CALIBRATE_OK);
+                displayPage(PAGE_CALIBRATE_CONFIRM);
                 break;
             }
             break;
@@ -560,9 +583,10 @@ void WEIGHT_ESTIMATOR::displayPage(uint8_t page)
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "INFO(X)");
-
+        display.drawString(display.getWidth() / 2, 0, "INFO");
         display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(6, 12, "CAL Value: " + String(calibrateValue));
         drawRightIndicator(1);
         display.display();
         break;
@@ -683,11 +707,11 @@ void WEIGHT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(96, 46, "Cancel");
         display.display();
         break;
-    case PAGE_CALIBRATE_OK:
+    case PAGE_CALIBRATE_CONFIRM:
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "Calibrate");
+        display.drawString(display.getWidth() / 2, 0, "Calibrate - Confirm");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.drawString(6, 12, "Old value: " + String(calibrateValue));
@@ -774,6 +798,15 @@ void WEIGHT_ESTIMATOR::tare()
 }
 void WEIGHT_ESTIMATOR::calibrate()
 {
+    //Draw the overlay
+    display.setColor(BLACK);
+    display.fillRect(16 - 8, 12 - 4, 96 + 18, 40 + 8);
+    display.setColor(WHITE);
+    display.drawRect(16, 12, 96, 40);
+    display.setFont(ArialMT_Plain_16);
+    display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+    display.drawString(64, 32, "Calibrating...");
+    display.display();
     //refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
     uint16_t knownWeight = calibrate4Digit * 1000 + calibrate3Digit * 100 + calibrate2Digit * 10 + calibrate1Digit;

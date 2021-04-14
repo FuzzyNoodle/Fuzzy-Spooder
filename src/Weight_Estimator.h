@@ -52,7 +52,8 @@
 #define TARE_CANCEL 1
 
 #define PAGE_CALIBRATE 30
-#define PAGE_CALIBRATE_OK 31
+#define PAGE_CALIBRATE_CONFIRM 31
+#define PAGE_DISPLAY_EEPROM 101
 
 #define CALIBRATE_4_DIGIT 0
 #define CALIBRATE_3_DIGIT 1
@@ -69,6 +70,7 @@
 #define MENU_CALIBRATE 1
 #define MENU_SET_WEIGHT 2
 #define MENU_SETUP 3
+#define MENU_DISPLAY_EEPROM 8
 
 #define EEPROM_CALIBRATE_VALUE 0
 
@@ -111,7 +113,7 @@ private:
                          "Notification(X)",
                          "Spood Holder(X)",
                          "Instruction(X)",
-                         "EEPROM9(X)"};
+                         "Display EEPROM"};
   uint8_t tareSelection = TARE_OK;
   void drawTriangle(uint8_t x, uint8_t y);
   void tare();
