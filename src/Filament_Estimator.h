@@ -1,13 +1,13 @@
 /*!
- *  @file Weight_Estimator.h
+ *  @file Filament_Estimator.h
  *
  *  
  *
  *  
  */
 
-#ifndef WEIGHT_ESTIMATOR_H
-#define WEIGHT_ESTIMATOR_H
+#ifndef FILAMENT_ESTIMATOR_H
+#define FILAMENT_ESTIMATOR_H
 
 //#define ENABLE_BLYNK
 #define DISABLE_WIFI
@@ -78,10 +78,10 @@
 #define DISPLAY_TYPE_FILAMENT 1
 #define DISPLAY_TYPE_SPOOL_HOLDER 2
 
-class WEIGHT_ESTIMATOR
+class FILAMENT_ESTIMATOR
 {
 public:
-  WEIGHT_ESTIMATOR(void);
+  FILAMENT_ESTIMATOR(void);
   void begin(void);
   void begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token);
   void update(void);
@@ -152,4 +152,4 @@ private:
   uint8_t calibrateSaveSelection = CALIBRATE_SAVE_OK;
 };
 
-#endif //#ifndef WEIGHT_ESTIMATOR_H
+#endif //#ifndef FILAMENT_ESTIMATOR_H

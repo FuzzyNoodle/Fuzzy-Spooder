@@ -25,9 +25,43 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 
 #### Using VSCode IDE + platformio extension
 
+1. PIO Home-> New Project
+    1. Name: **NoWifi_Demo** for example
+    1. Board: Search "mcu" select **NodeMCU 1.0 (ESP-12E Module)**
+    1. Framework: **Arduino**
+2. The default platformio.ini configuration would be:
+[env:nodemcuv2]
+```
+platform = espressif8266
+board = nodemcuv2
+framework = arduino
+```
+Copy and overwrite the configuration section to:
+```
+[env:NoWifi_Demo Example - USB Serial]
+platform = espressif8266
+board = nodemcuv2
+framework = arduino
+monitor_speed = 115200
+upload_speed = 921600
+monitor_filters = send_on_enter
+lib_deps = 
+	lennarthennigs/ESP Rotary@^1.4.2
+	lennarthennigs/Button2@^1.6.0
+	blynkkk/Blynk@^0.6.7
+	thingpulse/ESP8266 and ESP32 OLED driver for SSD1306 displays@^4.2.0
+	olkal/HX711_ADC@^1.2.7
+```
+This modifies the configuration and PIO will automatically download/install the required library dependencies.
+
+
 ### Using the demo sketch
 
 ### Menu and Functions
+
+- Spooder Home Page
+- Info Page
+- Menu Page
 
 ## Library Dependencies
 

@@ -9,17 +9,17 @@ Functions implemented:
 - Gauge Tare
 
 */
-#include "Weight_Estimator.h"
+#include "Filament_Estimator.h"
 
 // Create the fuzzy spooder object
-WEIGHT_ESTIMATOR spooder;
+FILAMENT_ESTIMATOR spooder;
 
 void setup()
 {
-  //Enable the Serial debug outout, not required
+  //Enable the Serial for debug outout, not required.
   Serial.begin(115200);
 
-  //Initialize the spooder
+  //Initialize the spooder, required.
   spooder.begin();
 }
 

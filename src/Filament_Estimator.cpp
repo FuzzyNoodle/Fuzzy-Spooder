@@ -1,4 +1,4 @@
-#include "Weight_Estimator.h"
+#include "Filament_Estimator.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
@@ -6,7 +6,7 @@
 
 extern BlynkWifi Blynk;
 
-WEIGHT_ESTIMATOR *estimatorPointer;            //Declare a pointer to WEIGHT_ESTIMATOR
+FILAMENT_ESTIMATOR *estimatorPointer;          //Declare a pointer to WEIGHT_ESTIMATOR
 static void outsideButtonHandler(Button2 &btn) // define global handler
 {
     estimatorPointer->buttonHandler(btn); // calls class member handler
@@ -16,19 +16,19 @@ static void outsideRotaryHandler(ESPRotary &rty) // define global handler
     estimatorPointer->rotaryHandler(rty); // calls class member handler
 }
 
-WEIGHT_ESTIMATOR::WEIGHT_ESTIMATOR() : server{80},
-                                       button{BUTTON_PIN},
-                                       rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, CLICKS_PER_STEP},
-                                       display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
-                                       loadcell{HX711_DOUT_PIN, HX711_SCK_PIN}
+FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
+                                           button{BUTTON_PIN},
+                                           rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, CLICKS_PER_STEP},
+                                           display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
+                                           loadcell{HX711_DOUT_PIN, HX711_SCK_PIN}
 
 {
 }
-void WEIGHT_ESTIMATOR::begin(void)
+void FILAMENT_ESTIMATOR::begin(void)
 {
     begin("", "", "", "");
 }
-void WEIGHT_ESTIMATOR::begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token)
+void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token)
 {
     Serial.println("");
 
@@ -127,7 +127,7 @@ void WEIGHT_ESTIMATOR::begin(const char *ssid, const char *password, const char 
 
     setPage(PAGE_HOME);
 }
-void WEIGHT_ESTIMATOR::update(void)
+void FILAMENT_ESTIMATOR::update(void)
 {
 #ifdef ENABLE_WIFI
     ArduinoOTA.handle();
@@ -160,7 +160,7 @@ void WEIGHT_ESTIMATOR::update(void)
         checkCalibrateEditModeTimer();
     }
 }
-void WEIGHT_ESTIMATOR::buttonHandler(Button2 &btn)
+void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
 {
     switch (btn.getClickType())
     {
@@ -288,7 +288,7 @@ void WEIGHT_ESTIMATOR::buttonHandler(Button2 &btn)
     //Serial.print(btn.getNumberOfClicks());
     //Blynk.notify("Hello from ESP8266! Button Pressed!");
 }
-void WEIGHT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
+void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 {
     uint8_t direction = rotary.getDirection();
     //Serial.println(direction);
@@ -490,7 +490,7 @@ void WEIGHT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
     //Serial.print("  ");
     //Serial.println(rotary.getPosition());
 }
-bool WEIGHT_ESTIMATOR::setPage(uint8_t page)
+bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
 
     previousPage = currentPage;
@@ -499,7 +499,7 @@ bool WEIGHT_ESTIMATOR::setPage(uint8_t page)
 
     return true;
 }
-void WEIGHT_ESTIMATOR::displayPage(uint8_t page)
+void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 {
     switch (page)
     {
@@ -735,7 +735,7 @@ void WEIGHT_ESTIMATOR::displayPage(uint8_t page)
         break;
     }
 }
-void WEIGHT_ESTIMATOR::drawBottomIndicator(uint8_t index)
+void FILAMENT_ESTIMATOR::drawBottomIndicator(uint8_t index)
 {
     const uint8_t x = 48;
     const uint8_t x_step = 12;
@@ -750,7 +750,7 @@ void WEIGHT_ESTIMATOR::drawBottomIndicator(uint8_t index)
     display.drawCircle(index_x, y, 3);
     display.drawCircle(index_x, y, 4);
 }
-void WEIGHT_ESTIMATOR::drawRightIndicator(uint8_t index)
+void FILAMENT_ESTIMATOR::drawRightIndicator(uint8_t index)
 {
     const uint8_t x = 122;
     const uint8_t y_step = 10;
@@ -775,13 +775,13 @@ void WEIGHT_ESTIMATOR::drawRightIndicator(uint8_t index)
         display.fillCircle(x, y, 5);
     }
 }
-void WEIGHT_ESTIMATOR::drawLeftIndicator(uint8_t index)
+void FILAMENT_ESTIMATOR::drawLeftIndicator(uint8_t index)
 {
     uint8_t x = 0;
     uint8_t y = 18 + index * 10;
     drawTriangle(x, y);
 }
-void WEIGHT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
+void FILAMENT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
 {
     display.drawLine(x, y - 3, x, y + 3);
     display.drawLine(x + 1, y - 3, x + 1, y + 3);
@@ -789,14 +789,14 @@ void WEIGHT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
     display.drawLine(x + 3, y - 1, x + 3, y + 1);
     display.drawLine(x + 4, y, x + 4, y);
 }
-void WEIGHT_ESTIMATOR::tare()
+void FILAMENT_ESTIMATOR::tare()
 {
     loadcell.tareNoDelay();
     drawTareMessage = true;
     drawTareMessageTimer = millis();
     Serial.println("Tare");
 }
-void WEIGHT_ESTIMATOR::calibrate()
+void FILAMENT_ESTIMATOR::calibrate()
 {
     //Draw the overlay
     display.setColor(BLACK);
@@ -816,7 +816,7 @@ void WEIGHT_ESTIMATOR::calibrate()
     Serial.println(newCalibrationValue);
     Serial.println("Calibrate completed.");
 }
-void WEIGHT_ESTIMATOR::updateHomepage()
+void FILAMENT_ESTIMATOR::updateHomepage()
 {
     if (millis() - updateHomepageTimer < UPDATE_HOMEPAGE_PERIOD)
         return;
@@ -826,7 +826,7 @@ void WEIGHT_ESTIMATOR::updateHomepage()
         displayPage(PAGE_HOME);
     }
 }
-void WEIGHT_ESTIMATOR::drawOverlay()
+void FILAMENT_ESTIMATOR::drawOverlay()
 {
     if (drawTareMessage == true)
     {
@@ -847,7 +847,7 @@ void WEIGHT_ESTIMATOR::drawOverlay()
         }
     }
 }
-void WEIGHT_ESTIMATOR::checkTareTimer()
+void FILAMENT_ESTIMATOR::checkTareTimer()
 {
     if (drawTareMessage == true)
     {
@@ -858,7 +858,7 @@ void WEIGHT_ESTIMATOR::checkTareTimer()
         }
     }
 }
-void WEIGHT_ESTIMATOR::checkCalibrateEditModeTimer()
+void FILAMENT_ESTIMATOR::checkCalibrateEditModeTimer()
 {
     if (millis() - calibrateEditModerTimer > CALIBRATE_EDIT_MODE_PERIOD)
     {
