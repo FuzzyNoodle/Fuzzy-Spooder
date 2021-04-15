@@ -29,16 +29,24 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
     1. Name: **NoWifi_Demo** for example
     2. Board: Search "mcu" select **NodeMCU 1.0 (ESP-12E Module)**
     3. Framework: **Arduino**
-2. The default platformio.ini configuration would be:
+2. PIO Home->Libraries->Search and goto "Fuzzy Spooder".
+3. Add to Project -> Select the project you just created. (ex. Projects\NoWifi_Demo). The library dependencies should be automataclly downloaded and installed.
+4. On the same page, select and copy all the sketch code from the NoWifi_Demo
+5. Open VSCode->Explorer(Left/Top Icon)-><Your Project Name>->src->main.cpp. Paste and overwrite the example sketch code copied from previous step.
+6. Upload the program(The right arrow located at the bottom toolbar).
+
+Additional note:
+The default platformio.ini configuration would be something like:
 
 ```
 [env:nodemcuv2]
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
+lib_deps = georgychen/Fuzzy Spooder@^0.1.2
 ```
 
-Copy and overwrite the configuration section to:
+Modify the configuration section to:
 ```
 [env:NoWifi_Demo Example - USB Serial]
 platform = espressif8266
@@ -47,21 +55,11 @@ framework = arduino
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
-lib_deps = 
-  georgychen/Fuzzy Spooder
-	lennarthennigs/ESP Rotary@^1.4.2
-	lennarthennigs/Button2@^1.6.0
-	blynkkk/Blynk@^0.6.7
-	thingpulse/ESP8266 and ESP32 OLED driver for SSD1306 displays@^4.2.0
-	olkal/HX711_ADC@^1.2.7
+lib_deps = georgychen/Fuzzy Spooder@^0.1.2
 
 ```
-This modifies the configuration and PIO will automatically download/install the required library dependencies.
+This increases upload speed and enables serial debug.
 
-3. Open VSCode->Explorer-><Your Program Name>->src->main.cpp
-Copy and paste example from NoWifi_Demo.ino (located in the example sub-folder) into main.cpp
-
-4. Upload the program. (The right arrow located at the bottom toolbar)
 
 ### Using the demo sketch
 
