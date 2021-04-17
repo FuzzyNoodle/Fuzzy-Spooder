@@ -113,10 +113,38 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     //Setup for HX711 Strain Gauge
     EEPROM.begin(512);
+
+    for (uint8_t addr = 0; addr < 64; addr++)
+    {
+        EEPROM.put(addr, 0xFF);
+    }
+    EEPROM.commit();
+    Serial.println("EEPROM reset.");
+
+    // uint8_t value;
+    // for (uint16_t addr = 0; addr < 64; addr++)
+    // {
+    //     EEPROM.get(addr, value);
+    //     Serial.print(value);
+    //     Serial.print(" ");
+    // }
+
     EEPROM.get(EEPROM_CALIBRATE_VALUE, calibrateValue);
+
+    if (isnan(calibrateValue) == true)
+    {
+        //not a number
+        Serial.println("EEPROM Calibrate value is nan");
+        Serial.println("Reset to 1.0 and save to EEROPM.");
+        calibrateValue = 1.0;
+        EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
+        EEPROM.commit();
+        Serial.println("Perform a calibration after start up.");
+    }
 
     Serial.print("EEPROM Calibrate value = ");
     Serial.println(calibrateValue);
+
     loadcell.begin();
     // preciscion right after power-up can be improved by adding a few seconds of stabilizing time
 
