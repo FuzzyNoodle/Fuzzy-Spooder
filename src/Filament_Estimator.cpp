@@ -114,12 +114,12 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     //Setup for HX711 Strain Gauge
     EEPROM.begin(512);
 
-    for (uint8_t addr = 0; addr < 64; addr++)
-    {
-        EEPROM.put(addr, 0xFF);
-    }
-    EEPROM.commit();
-    Serial.println("EEPROM reset.");
+    // for (uint8_t addr = 0; addr < 64; addr++)
+    // {
+    //     EEPROM.put(addr, 0xFF);
+    // }
+    // EEPROM.commit();
+    // Serial.println("EEPROM reset.");
 
     // uint8_t value;
     // for (uint16_t addr = 0; addr < 64; addr++)
