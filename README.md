@@ -71,7 +71,7 @@ There are three main pages:
   - Single click: Cycles the display mode:
     - Total weight: measured (spool holder + filament) weight.
     - Filament weight: an estimated weight (total - spool holder weight)
-    - Spool holder weight: an user input value. Fixed at 180g at this moment.
+    - Spool holder weight: an user input value, adjustable in sketch.
   - Long click: Perform a tare. 
 - **Info Page**:
   - Displays additional information
