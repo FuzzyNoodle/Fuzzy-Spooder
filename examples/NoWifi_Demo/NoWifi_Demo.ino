@@ -21,6 +21,19 @@ void setup()
 
   //Initialize the spooder, required.
   spooder.begin();
+
+  //Optional: set the default total weight(spool holder + filament) in grams for calibration after power on
+  //Valid values from 0 to 9999
+  spooder.setCalibrationWeight(1180);
+
+  //Optional: set the steps per click of the rotary encoder
+  spooder.setStepsPerClick(4);
+
+  //Optional: set the time for long click (in ms)
+  spooder.setLongClickTime(400);
+
+  //Optional: set the current spool holder weight in grams
+  spooder.setCurrentSpoolHolderWeight(180);
 }
 
 void loop()

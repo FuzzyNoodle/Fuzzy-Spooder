@@ -32,7 +32,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 2. PIO Home->Libraries->Search and go to **"Fuzzy Spooder"**.
 3. Add to Project -> Select the project you just created. (ex. **Projects\NoWifi_Demo**). The library dependencies should be automataclly downloaded and installed.
 4. On the same page, select and copy all the sketch code from the NoWifi_Demo
-5. Open VSCode->Explorer(Left/Top Icon)-><Your Project Name>->src->**main.cpp**. Paste and overwrite the example sketch code copied from previous step.
+5. Open VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->**main.cpp**. Paste and overwrite the example sketch code copied from previous step.
 6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
 
 Additional note:

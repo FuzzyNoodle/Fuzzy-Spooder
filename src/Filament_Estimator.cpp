@@ -18,7 +18,7 @@ static void outsideRotaryHandler(ESPRotary &rty) // define global handler
 
 FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
                                            button{BUTTON_PIN},
-                                           rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, CLICKS_PER_STEP},
+                                           rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, stepsPerClick},
                                            display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
                                            loadcell{HX711_DOUT_PIN, HX711_SCK_PIN}
 
@@ -562,6 +562,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             if (abs(totalWeight) < 9999)
             {
                 display.drawString(90, 20, String(totalWeight, 0));
+                //Draw unit
+                display.setFont(ArialMT_Plain_10);
+                display.drawString(100, 32, "g");
             }
 
             break;
@@ -578,9 +581,19 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.setPixel(13, 43);
             display.setPixel(18, 43);
             display.setPixel(23, 58);
-            if (abs(filamentWeight) < 9999)
+            if (filamentWeight > emptyThreshold)
             {
-                display.drawString(90, 20, String(filamentWeight, 0));
+                if (abs(filamentWeight) < 9999)
+                {
+                    display.drawString(90, 20, String(filamentWeight, 0));
+                    //Draw unit
+                    display.setFont(ArialMT_Plain_10);
+                    display.drawString(100, 32, "g");
+                }
+            }
+            else //shows empty on the homescreen
+            {
+                display.drawString(104, 20, "Empty");
             }
 
             break;
@@ -594,14 +607,13 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             if (abs(spoolHolderWeight) < 9999)
             {
                 display.drawString(90, 20, String(spoolHolderWeight, 0));
+                //Draw unit
+                display.setFont(ArialMT_Plain_10);
+                display.drawString(100, 32, "g");
             }
 
             break;
         }
-
-        //Draw unit
-        display.setFont(ArialMT_Plain_10);
-        display.drawString(100, 32, "g");
 
         drawOverlay();
 
@@ -615,6 +627,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.drawString(6, 12, "CAL Value: " + String(calibrateValue));
+        display.drawString(6, 22, "Spool: " + String(uint16_t(spoolHolderWeight)));
+
         drawRightIndicator(1);
         display.display();
         break;
@@ -837,9 +851,9 @@ void FILAMENT_ESTIMATOR::calibrate()
     display.display();
     //refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
-    uint16_t knownWeight = calibrate4Digit * 1000 + calibrate3Digit * 100 + calibrate2Digit * 10 + calibrate1Digit;
+    calibrationWeight = getCalibrationWeight();
     //get the new calibration value
-    newCalibrationValue = loadcell.getNewCalibration(knownWeight);
+    newCalibrationValue = loadcell.getNewCalibration(calibrationWeight);
     Serial.print("New calibration value = ");
     Serial.println(newCalibrationValue);
     Serial.println("Calibrate completed.");
@@ -894,4 +908,54 @@ void FILAMENT_ESTIMATOR::checkCalibrateEditModeTimer()
         calibrateEditModerTimer = millis();
         displayPage(PAGE_CALIBRATE);
     }
+}
+void FILAMENT_ESTIMATOR::setCalibrationWeight(uint16_t weight)
+{
+    calibrate4Digit = (weight / 1000U) % 10;
+    calibrate3Digit = (weight / 100U) % 10;
+    calibrate2Digit = (weight / 10U) % 10;
+    calibrate1Digit = (weight / 1U) % 10;
+}
+uint16_t FILAMENT_ESTIMATOR::getCalibrationWeight()
+{
+    calibrationWeight = calibrate4Digit * 1000 + calibrate3Digit * 100 + calibrate2Digit * 10 + calibrate1Digit;
+    return calibrationWeight;
+}
+void FILAMENT_ESTIMATOR::setCurrentSpoolHolderWeight(uint16_t weight)
+{
+    spoolHolderWeight = weight;
+}
+void FILAMENT_ESTIMATOR::setStepsPerClick(uint8_t steps)
+{
+    stepsPerClick = steps;
+    rotary.setStepsPerClick(steps);
+}
+uint8_t FILAMENT_ESTIMATOR::getStepsPerClick()
+{
+
+    return rotary.getStepsPerClick();
+}
+void FILAMENT_ESTIMATOR::setDebounceTime(uint16_t ms)
+{
+    button.setDebounceTime(ms);
+}
+void FILAMENT_ESTIMATOR::setLongClickTime(uint16_t ms)
+{
+    button.setLongClickTime(ms);
+}
+void FILAMENT_ESTIMATOR::setDoubleClickTime(uint16_t ms)
+{
+    button.setDoubleClickTime(ms);
+}
+uint16_t FILAMENT_ESTIMATOR::getDebounceTime()
+{
+    return button.getDebounceTime();
+}
+uint16_t FILAMENT_ESTIMATOR::getLongClickTime()
+{
+    return button.getLongClickTime();
+}
+uint16_t FILAMENT_ESTIMATOR::getDoubleClickTime()
+{
+    return button.getDoubleClickTime();
 }

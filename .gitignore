@@ -283,3 +283,6 @@ __pycache__/
 *.pyc
 extras/personal_notes.txt
 library.json
+
+# Personal Develop Files
+extras/ignored/

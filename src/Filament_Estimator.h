@@ -19,7 +19,7 @@
 
 #define ROTARY_PIN_CLK D3
 #define ROTARY_PIN_DT D4
-#define CLICKS_PER_STEP 4
+#define DEFAULT_STEPS_PER_CLICK 4
 #define BUTTON_PIN D0
 
 //Include the SSD1306 display library for esp8266
@@ -41,6 +41,10 @@
 #ifndef DISABLE_WIFI
 #define ENABLE_WIFI
 #endif
+
+#define DEFAULT_SPOOL_HOLDER_WEIGHT 180
+#define DEFAULT_TOTAL_WEIGHT 1180
+#define DEFAULT_EMPTY_THRESHOLD -30
 
 #define PAGE_NONE 0
 #define PAGE_HOME 11
@@ -88,6 +92,32 @@ public:
   void buttonHandler(Button2 &btn);
   void rotaryHandler(ESPRotary &rty);
 
+  //Set the default total weight in grams for calibration after power on
+  //Valid values from 0 to 9999
+  void setCalibrationWeight(uint16_t weight);
+
+  //Set the default weight in grams for the spool holder. Can be changed in the UI.
+  void setCurrentSpoolHolderWeight(uint16_t weight);
+
+  //Set the steps per click of the rotary encoder
+  void setStepsPerClick(uint8_t steps);
+
+  //Get the steps per click of the rotary encoder
+  uint8_t getStepsPerClick();
+
+  //Time settings for button
+  void setDebounceTime(uint16_t ms);
+  //Time settings for button
+  void setLongClickTime(uint16_t ms);
+  //Time settings for button
+  void setDoubleClickTime(uint16_t ms);
+  //Time settings for button
+  uint16_t getDebounceTime();
+  //Time settings for button
+  uint16_t getLongClickTime();
+  //Time settings for button
+  uint16_t getDoubleClickTime();
+
 private:
   ESP8266WebServer server;
   Button2 button;
@@ -119,6 +149,8 @@ private:
   void tare();
   void calibrate();
 
+  uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
+
   HX711_ADC loadcell;
   float calibrateValue;
   float newCalibrationValue;
@@ -135,16 +167,19 @@ private:
   const uint32_t DRAW_TARE_MESSAGE_PERIOD = 1000;
   void checkTareTimer();
 
-  uint8_t displayType = DISPLAY_TYPE_TOTAL;
-  float spoolHolderWeight = 180;
+  uint8_t displayType = DISPLAY_TYPE_FILAMENT;
+  float spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
   float filamentWeight;
+  float emptyThreshold = DEFAULT_EMPTY_THRESHOLD;
 
   uint8_t calibrateSelection = CALIBRATE_4_DIGIT;
   bool calibrateEditDigitMode = false;
-  uint8_t calibrate4Digit = 1;
-  uint8_t calibrate3Digit = 1;
-  uint8_t calibrate2Digit = 8;
+  uint8_t calibrate4Digit = 0;
+  uint8_t calibrate3Digit = 0;
+  uint8_t calibrate2Digit = 0;
   uint8_t calibrate1Digit = 0;
+  uint16_t getCalibrationWeight();
+  uint16_t calibrationWeight = 0;
   void checkCalibrateEditModeTimer();
   bool displayCalibrateDigit = true;
   uint32_t calibrateEditModerTimer;
