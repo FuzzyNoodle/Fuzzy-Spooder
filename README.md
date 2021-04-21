@@ -70,7 +70,7 @@ There are three main pages:
 - **Spooder Home Page**:
   - Single click: Cycles the display mode:
     - Total weight: measured (spool holder + filament) weight.
-    - Filament weight: an estimated weight (total - spool holder weight)
+    - Filament weight: an estimated weight (total - spool holder weight). Displays "Empty" when the value is below a negative value.
     - Spool holder weight: an user input value, adjustable in sketch.
   - Long click: Perform a tare. 
 - **Info Page**:
