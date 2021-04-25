@@ -31,6 +31,10 @@ void FILAMENT_ESTIMATOR::begin(void)
 void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token)
 {
     Serial.println("");
+    //Firmware version setup
+    currentVersion.major = CURRENT_VERSION_MAJOR;
+    currentVersion.minor = CURRENT_VERSION_MINOR;
+    currentVersion.patch = CURRENT_VERSION_PATCH;
 
     //Setup for OLED
     display.init();
@@ -111,43 +115,84 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     rotary.setRightRotationHandler(outsideRotaryHandler);
     Serial.println(F("Rotary Switch setup ok."));
 
-    //Setup for HX711 Strain Gauge
-    EEPROM.begin(512);
+    //Setup for settings and eeprom
+    EEPROM.begin(DECLARED_EEPROM_SIZE);
+    //setting.calValue = 3.14159;
+    Serial.print(F("Size of setting struct: "));
+    Serial.println((uint32_t)sizeof(setting));
 
-    // for (uint8_t addr = 0; addr < 64; addr++)
-    // {
-    //     EEPROM.put(addr, 0xFF);
-    // }
-    // EEPROM.commit();
-    // Serial.println("EEPROM reset.");
-
-    // uint8_t value;
-    // for (uint16_t addr = 0; addr < 64; addr++)
-    // {
-    //     EEPROM.get(addr, value);
-    //     Serial.print(value);
-    //     Serial.print(" ");
-    // }
-
-    EEPROM.get(EEPROM_CALIBRATE_VALUE, calibrateValue);
-
-    if (isnan(calibrateValue) == true)
+    //Load eeprom data to setting
+    loadToSetting();
+    //validate data and reset to defaults
+    bool isDirty = false;
+    if (setting.version.major > 99)
     {
-        //not a number
-        Serial.println("EEPROM Calibrate value is nan");
-        Serial.println("Reset to 1.0 and save to EEROPM.");
-        calibrateValue = 1.0;
-        EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
-        EEPROM.commit();
-        Serial.println("Perform a calibration after start up.");
+        setting.version.major = 0;
+        isDirty = true;
     }
 
-    Serial.print("EEPROM Calibrate value = ");
-    Serial.println(calibrateValue);
+    if (setting.version.minor > 99)
+    {
+        setting.version.minor = 0;
+        isDirty = true;
+    }
+    if (setting.version.patch > 99)
+    {
+        setting.version.patch = 0;
+        isDirty = true;
+    }
+    if (isnan(setting.calValue))
+    {
+        setting.calValue = DEFAULT_CALIBRATION_VALUE;
+        isDirty = true;
+    }
+    if (isDirty == true)
+    {
+        Serial.println(F("Saving default values to EEPROM."));
+        saveToEEPROM();
+    }
+    //Compare firmware version
+
+    if (versionToNumber(currentVersion) > versionToNumber(setting.version))
+    {
+        Serial.println(F("Newer version number of firmware uploaded."));
+        setting.version.major = currentVersion.major;
+        setting.version.minor = currentVersion.minor;
+        setting.version.patch = currentVersion.patch;
+        saveToEEPROM();
+    }
+    else if (versionToNumber(currentVersion) < versionToNumber(setting.version))
+    {
+        Serial.println(F("Older version number of firmware uploaded."));
+    }
+    else
+    {
+        //Same version
+    }
+
+    dumpSetting();
+    //Setup for version and setting
+    //setting.version.major = curretVersionMajor;
+    //setting.version.minor = curretVersionMinor;
+    //setting.version.patch = curretVersionPatch;
+
+    // EEPROM.get(EEPROM_CALIBRATE_VALUE, calibrateValue);
+
+    // if (isnan(calibrateValue) == true)
+    // {
+    //     //not a number
+    //     Serial.println("EEPROM Calibrate value is nan");
+    //     Serial.println("Reset to 1.0 and save to EEROPM.");
+    //     calibrateValue = 1.0;
+    //     EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
+    //     EEPROM.commit();
+    //     Serial.println("Perform a calibration after start up.");
+    // }
+
+    // Serial.print("EEPROM Calibrate value = ");
+    // Serial.println(calibrateValue);
 
     loadcell.begin();
-    // preciscion right after power-up can be improved by adding a few seconds of stabilizing time
-
     loadcell.start(stabilizingTime, false);
     loadcell.setCalFactor(calibrateValue);
     tare();
@@ -204,14 +249,8 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case MENU_CALIBRATE:
                 setPage(PAGE_CALIBRATE);
                 break;
-            case MENU_DISPLAY_EEPROM:
-                uint8_t value;
-                for (uint16_t addr = 0; addr < 64; addr++)
-                {
-                    EEPROM.get(addr, value);
-                    Serial.print(value);
-                    Serial.print(" ");
-                }
+            case MENU_DEBUG:
+                setPage(PAGE_DEBUG);
                 break;
             }
 
@@ -280,7 +319,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             break;
         case PAGE_CALIBRATE_CONFIRM:
-        {
+
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_OK:
@@ -295,9 +334,31 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             setPage(PAGE_MENU);
             break;
+        case PAGE_DEBUG:
+            switch (debugMenuSelection)
+            {
+            case DEBUG_LOAD_TO_SETTING:
+                loadToSetting();
+                break;
+            case DEBUG_SAVE_TO_EEPROM:
+                saveToEEPROM();
+                break;
+            case DEBUG_DUMP_SETTING:
+                dumpSetting();
+                break;
+            case DEBUG_DUMP_EEPROM:
+                dumpEEPROM();
+                break;
+            case DEBUG_ERASE_EEPROM:
+                eraseEEPROM();
+                break;
+            case DEBUG_RETURN:
+                debugMenuSelection = DEBUG_LOAD_TO_SETTING;
+                setPage(PAGE_MENU);
+                break;
+            }
+            break;
         }
-        }
-
         break; //switch (currentPage)
     case DOUBLE_CLICK:
 
@@ -416,8 +477,17 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_DEBUG:
+            if (debugMenuSelection > DEBUG_LOAD_TO_SETTING)
+            {
+                debugMenuSelection--;
+                if (debugMenuSelection < debugMenuItemStartIndex)
+                {
+                    debugMenuItemStartIndex--;
+                }
+                setPage(PAGE_DEBUG);
+            }
         }
-
         break;
     case RE_RIGHT:
         //rotateCW();
@@ -510,6 +580,16 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_DEBUG:
+            if (debugMenuSelection < (numberOfDebugMenuItems - 1))
+            {
+                debugMenuSelection++;
+                if (debugMenuSelection >= debugMenuItemStartIndex + debugMenuItemPerPage)
+                {
+                    debugMenuItemStartIndex++;
+                }
+                setPage(PAGE_DEBUG);
+            }
         }
 
         break;
@@ -520,7 +600,8 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 }
 bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
-
+    Serial.print(F("Set page:"));
+    Serial.println(page);
     previousPage = currentPage;
     currentPage = page;
     displayPage(currentPage);
@@ -529,6 +610,13 @@ bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 }
 void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 {
+
+    if (page != PAGE_HOME)
+    {
+        Serial.print(F("Display page: "));
+        Serial.println(page);
+    }
+
     switch (page)
     {
     case PAGE_HOME:
@@ -773,6 +861,25 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         }
 
         display.display();
+        break;
+    case PAGE_DEBUG:
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Debug");
+        display.drawRect(0, 12, 128, 1);
+
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(6, 12, debugMenuTitle[debugMenuItemStartIndex]);
+        display.drawString(6, 22, debugMenuTitle[debugMenuItemStartIndex + 1]);
+        display.drawString(6, 32, debugMenuTitle[debugMenuItemStartIndex + 2]);
+        display.drawString(6, 42, debugMenuTitle[debugMenuItemStartIndex + 3]);
+        display.drawString(6, 52, debugMenuTitle[debugMenuItemStartIndex + 4]);
+
+        drawLeftIndicator(debugMenuSelection - debugMenuItemStartIndex);
+
+        display.display();
+        break;
     default:
         break;
     }
@@ -958,4 +1065,76 @@ uint16_t FILAMENT_ESTIMATOR::getLongClickTime()
 uint16_t FILAMENT_ESTIMATOR::getDoubleClickTime()
 {
     return button.getDoubleClickTime();
+}
+void FILAMENT_ESTIMATOR::loadToSetting()
+{
+    Serial.println(F("Load EEPROM data to setting:"));
+    EEPROM.get(EEPROM_START_ADDRESS, setting);
+}
+void FILAMENT_ESTIMATOR::saveToEEPROM()
+{
+    Serial.println(F("Save setting data to EEPROM:"));
+    EEPROM.put(EEPROM_START_ADDRESS, setting);
+    EEPROM.commit();
+}
+void FILAMENT_ESTIMATOR::dumpSetting()
+{
+    Serial.println(F("Dump setting:"));
+    //Starting from v0.3.0
+    Serial.print(F("  - Firmware version: "));
+    Serial.print(setting.version.major);
+    Serial.print(F("."));
+    Serial.print(setting.version.minor);
+    Serial.print(F("."));
+    Serial.println(setting.version.patch);
+    Serial.print(F("  - calValue: "));
+    Serial.println(setting.calValue);
+    Serial.println(F("Setting dump completed."));
+}
+void FILAMENT_ESTIMATOR::dumpEEPROM()
+{
+    Serial.println(F("Dump EEPROM data:"));
+    for (uint16_t addr = 0; addr < DECLARED_EEPROM_SIZE; addr++)
+    {
+        if (addr % 64 == 0)
+        {
+            Serial.println("");
+            Serial.print("[");
+
+            if (addr == 0)
+                Serial.print("00");
+            if (addr == 64)
+                Serial.print("0");
+
+            Serial.print(addr);
+            Serial.print("]:");
+        }
+
+        if (EEPROM.read(addr) < 10)
+            Serial.print("0");
+        Serial.print(EEPROM.read(addr), HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
+void FILAMENT_ESTIMATOR::eraseEEPROM()
+{
+    Serial.println(F("Erase EEPROM data:"));
+    for (uint16_t addr = 0; addr < DECLARED_EEPROM_SIZE; addr++)
+    {
+        EEPROM.write(addr, 0xff);
+    }
+
+    EEPROM.commit();
+}
+uint32_t FILAMENT_ESTIMATOR::versionToNumber(VERSION_STRUCT v)
+{
+    //a simple conversion
+    //v1.2.3 will convert to something like 10203
+    //So that the max number for each item that works will be 99
+    uint32_t number = 0;
+    number += v.major * 10000;
+    number += v.minor * 100;
+    number += v.patch * 1;
+    return number;
 }
