@@ -39,6 +39,11 @@
 #define HX711_DOUT_PIN D5 //mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  //mcu > HX711 sck pin
 
+//FS
+#include <ArduinoJson.h>
+#include "FS.h"
+#include <LittleFS.h>
+
 #ifndef DISABLE_SERIAL_DEBUG
 #define ENABLE_SERIAL_DEBUG
 #endif
@@ -138,8 +143,6 @@ private:
   ESPRotary rotary;
   SSD1306Wire display;
 
- 
-
   struct VERSION_STRUCT
   {
     uint8_t major; //incompatible API changes
@@ -147,7 +150,7 @@ private:
     uint8_t patch; //make backwards compatible bug fixes
   };
   VERSION_STRUCT currentVersion;
-  
+
   //struct used to interact with eeprom, without the hasstle of address and lengths
   struct EEPROM_SETTING_STRUCT
   {
@@ -236,6 +239,9 @@ private:
   void dumpEEPROM();
   void eraseEEPROM();
   uint32_t versionToNumber(VERSION_STRUCT v);
+
+  void listDir(const char *dirname); //List the FSn directory in a user-friendly text format
+  void _listDir(const char *dirname, uint8_t level);
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

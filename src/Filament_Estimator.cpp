@@ -36,15 +36,29 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     currentVersion.minor = CURRENT_VERSION_MINOR;
     currentVersion.patch = CURRENT_VERSION_PATCH;
 
+    Serial.println("Program started.");
+
     //Setup for OLED
     display.init();
     display.flipScreenVertically();
     display.setContrast(255);
     display.setLogBuffer(5, 30);
 
-    Serial.println("Program started.");
-
     Serial.println("OLED setup ok.");
+
+    //Mount file system
+    if (!LittleFS.begin())
+    {
+        Serial.println(F("Failed to mount file system"));
+    }
+    else
+    {
+        Serial.println(F("LittleFS file system mounted."));
+        //Serial.println(F("Listing contents:"));
+
+        listDir("");
+    }
+
 #ifdef ENABLE_WIFI
     WiFi.hostname(hostname); //hostname is set here
 
@@ -1137,4 +1151,61 @@ uint32_t FILAMENT_ESTIMATOR::versionToNumber(VERSION_STRUCT v)
     number += v.minor * 100;
     number += v.patch * 1;
     return number;
+}
+void FILAMENT_ESTIMATOR::listDir(const char *dirname)
+{
+    Serial.printf("Listing directory: %s\r\n", dirname);
+    Serial.println("<root>");
+    _listDir(dirname, 0);
+    FSInfo fs_info;
+
+    LittleFS.info(fs_info);
+    Serial.print(F("File system used: "));
+    Serial.print(fs_info.usedBytes);
+    Serial.println(F(" Bytes"));
+    Serial.print(F("File system total: "));
+    Serial.print(fs_info.totalBytes);
+    Serial.println(F(" Bytes"));
+}
+void FILAMENT_ESTIMATOR::_listDir(const char *dirname, uint8_t level)
+{
+    Dir dir = LittleFS.openDir(dirname);
+    level++;
+    while (dir.next())
+    {
+        Serial.print(F("|"));
+        for (uint8_t i = 0; i < level; i++)
+        {
+            if (i > 0)
+            {
+                Serial.print(F("   "));
+                if (i == (level - 1))
+                {
+                    Serial.print(F("|"));
+                }
+            }
+            else //i=0
+            {
+                //Serial.print("--");
+            }
+            //Serial.print("--");
+        }
+        Serial.print("--");
+        if (dir.isFile())
+        {
+
+            Serial.print(dir.fileName());
+            Serial.print(F("  "));
+            Serial.println(dir.fileSize());
+        }
+        else //isDirectory()
+        {
+            Serial.print("<");
+            Serial.print(dir.fileName());
+            Serial.println(">");
+            _listDir((dirname + String("/") + dir.fileName()).c_str(), level);
+        }
+    }
+
+    level++;
 }
