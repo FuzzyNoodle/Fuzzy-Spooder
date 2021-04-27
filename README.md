@@ -64,6 +64,7 @@ lib_deps = georgychen/Fuzzy Spooder@^0.1.2
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
 
+---
 
 ### Using the NoWifi_Demo Example
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
@@ -84,4 +85,12 @@ There are three main pages:
   - Calibrate: Perform a calibration. Calibrated Value will be saved to EEPROM.
   - Display EEPROM: Dumps eeprom data to serial monitor for debugging.
 
+#### Spooder ID
+
+#### Spool Holders
+Spool holder weight is a user input value in grams. The default spool holder weight can be 
+- set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method, or
+- adjusted in the spooder UI. 
+
+There are additional 5 slots of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
