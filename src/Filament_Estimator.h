@@ -39,7 +39,7 @@
 #define HX711_DOUT_PIN D5 //mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  //mcu > HX711 sck pin
 
-//FS
+//File system
 #include <ArduinoJson.h>
 #include "FS.h"
 #include <LittleFS.h>

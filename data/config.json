@@ -1,0 +1,28 @@
+{
+    "config_version": "0.3.0",
+    "wifi_ssid": "your_ssid",
+    "wifi_password": "your_password",
+    "blynk_auth": "your_blynk_auth_token",
+    "spool_holder": [
+        {
+            "name": "Black esun",
+            "weight": 180
+        },
+        {
+            "name": "your_holder_name_here",
+            "weight": 150
+        },
+        {
+            "name": "your_other_holder",
+            "weight": 250
+        },
+        {
+            "name": "your_other_holder",
+            "weight": 250
+        },
+        {
+            "name": "your_other_holder",
+            "weight": 250
+        }
+    ]
+}
