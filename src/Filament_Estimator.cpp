@@ -54,12 +54,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     else
     {
         Serial.println(F("LittleFS file system mounted."));
-        //Serial.println(F("Listing contents:"));
-
         listDir("");
     }
 
-    displayMonoBitmap("/images/logo_w.bmp");
+    displayMonoBitmap("/images/logo.bmp");
 
 #ifdef ENABLE_WIFI
     WiFi.hostname(hostname); //hostname is set here
@@ -1229,7 +1227,7 @@ void FILAMENT_ESTIMATOR::displayMonoBitmap(const char *filename)
     Serial.print(F("File size: "));
     Serial.print(f.size());
     Serial.println(F(" Bytes."));
-    Serial.println("Peek");
+
     if (f.size() < 1024)
     {
         Serial.print(F("File size too small(<1024). "));
@@ -1244,71 +1242,86 @@ void FILAMENT_ESTIMATOR::displayMonoBitmap(const char *filename)
         uint32_t width = 0;
         uint32_t height = 0;
         uint32_t colors = 0;
+        uint32_t bitmapInfoHeaderSize = 0;
 
     } bmp;
     bmp.signature[0] = f.read();
     bmp.signature[1] = f.read();
-
+    bool mismatch = false;
     if (!(bmp.signature[0] == 0x42 && bmp.signature[1] == 0x4d))
     {
         Serial.print(F("Not a bitmap file."));
-        return;
+        mismatch = true;
     }
     bmp.filesize = read32(f, 0x03);
     bmp.offset = read32(f, 0x0a);
     bmp.width = read32(f, 0x12);
     bmp.height = read32(f, 0x16);
     bmp.colors = read32(f, 0x2E);
+    bmp.bitmapInfoHeaderSize = read32(f, 0x0E);
 
-    Serial.print(F("offset = "));
-    Serial.println(bmp.offset);
-    Serial.print(F("width = "));
-    Serial.println(bmp.width);
-    Serial.print(F("height = "));
-    Serial.println(bmp.height);
-    Serial.print(F("colors = "));
-    Serial.println(bmp.colors);
-
-    f.seek(0x36);
-    Serial.print(F("colors 0 RGB = "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-
-    f.seek(0x3A);
-    Serial.print(F("colors 1 RGB = "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-    Serial.print(f.read());
-    Serial.print(F(" "));
-    Serial.println();
-
-    f.seek(0);
-    while (f.available())
+    if (bmp.width != 128 && bmp.height != 64)
     {
-        char c = f.read();
-        if (c < 10)
-            Serial.print("0");
-        Serial.print(c, HEX);
-        Serial.print("  ");
+        Serial.println(F("BMP file width and height mismatch."));
+        Serial.print(F("Width = "));
+        Serial.println(bmp.width);
+        Serial.print(F("Height = "));
+        Serial.println(bmp.height);
+        mismatch = true;
     }
-
+    // Serial.print(F("Header Offset = "));
+    // Serial.println(bmp.offset);
+    if (bmp.colors != 2)
+    {
+        Serial.println(F("BMP file color mismatch."));
+        Serial.print(F("Colors = "));
+        Serial.println(bmp.colors);
+        mismatch = true;
+    }
+    if (mismatch == true)
+        return;
+    // Serial.print(F("Header size = "));
+    // Serial.println(bmp.bitmapInfoHeaderSize);
+    uint8_t colorOffset = 14 + bmp.bitmapInfoHeaderSize;
+    f.seek(colorOffset);
+    bool normalDir;
+    if (f.read() == 0 && f.read() == 0 && f.read() == 0)
+    {
+        //if the color 0 is (0,0,0) black,
+        //bits of 0 is black
+        normalDir = true;
+    }
+    else
+    {
+        normalDir = false;
+    }
+    //dump the file for debugging
+    //f.seek(0);
+    // while (f.available())
+    // {
+    //     char c = f.read();
+    //     if (c < 10)
+    //         Serial.print("0");
+    //     Serial.print(c, HEX);
+    //     Serial.print("  ");
+    // }
     uint8_t buffer[1024];
     f.seek(bmp.offset);
     for (uint16_t i = 0; i < 1024; i++)
     {
-        buffer[1024 - i] = f.read();
+        if (normalDir == true)
+        {
+            //bits of 0 means black in the bmp
+            buffer[1023 - i] = f.read();
+        }
+        else
+        {
+            //bits of 0 means white in the bmp, reading is inverted
+            buffer[1023 - i] = ~f.read();
+        }
     }
     display.drawXbm(0, 0, 128, 64, buffer);
     display.display();
-    while (true)
-        delay(1);
-
     f.close();
 }
 uint32_t FILAMENT_ESTIMATOR::read32(File f, uint32_t offset)

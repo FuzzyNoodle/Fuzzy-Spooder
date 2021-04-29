@@ -1,0 +1,5 @@
+The logo file can be replaced with following format:
+file type: bitmap
+filename: logo.bmp
+size: 128x64 pixels
+color: 2 (monochrome)
