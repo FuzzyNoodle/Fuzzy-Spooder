@@ -242,6 +242,9 @@ private:
 
   void listDir(const char *dirname); //List the FSn directory in a user-friendly text format
   void _listDir(const char *dirname, uint8_t level);
+  void dumpConfig(); //Pring all the config.json content for debugging purpose
+  void displayMonoBitmap(const char *filename);
+  uint32_t read32(File f, uint32_t offset);
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
