@@ -12,7 +12,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 #### Using Arduino IDE
 
 1. [Install](https://arduino-esp8266.readthedocs.io/en/latest/installing.html) the ESP8266 Arduino Core.
-2. Follow this [tutorial](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) to install the file system uploader, but use [this plugin](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin) instead of SPIFFS. 
+2. Follow this [tutorial](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) to install the file system uploader, but use [this LittleFS plugin](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin) instead of SPIFFS. 
 3. Arduino IDE->Tools->Board->ESP8266 Boards, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
 4. Install the [Fuzzy Spooder](https://github.com/FuzzyNoodle/Fuzzy-Spooder) using the the [Arduino Library Manager](https://www.arduino.cc/en/guide/libraries#toc3). 
 5. Starting with IDE v1.8.10, the following library dependencies will be prompted to install: (If not being prompted, please install them maually.)
@@ -69,7 +69,15 @@ This creates a more user friendly env:name, increases upload speed and enables s
 ---
 
 ### Upload the config.json file to the file system
+An ESP8266 file system is used in this project. The data folder which contains all the files to be uploaded to the ESP8266 flash memory is at the same level as the src folder.
 
+#### Using Arduino IDE
+1. Copy the 'data' folder from the library (ex: ```arduino\libraies\Fuzzy_Spooder```) to you sketch folder (ex: ```Arduino\NoWifi_Demo```).
+2. Edit the config.json file in the data folder as required. 
+3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266. 
+
+#### Using VSCode IDE + platformio extension
+1. Copy the 'data' folder from the library (ex: ```platformio_project_folder\.pio\libdeps\NoWifi_Demo\Fuzzy_Spooder```) to you project folder (ex: ```platformio_project_folder\NoWifi_Demo```).
 
 ### Using the NoWifi_Demo Example
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
@@ -88,7 +96,8 @@ There are three main pages:
 - **Menu Page**: Rotate and click the menu items. Currently available menu items are:
   - Tare: Perform a tare.
   - Calibrate: Perform a calibration. Calibrated Value will be saved to EEPROM.
-  - Display EEPROM: Dumps eeprom data to serial monitor for debugging.
+  - Spool Holder Weight: Set spool holder weight, or load preset values.
+  - Debug: Various debugging functions.
 
 #### Spooder ID
 
