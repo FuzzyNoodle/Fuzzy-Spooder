@@ -13,7 +13,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 
 1. [Install](https://arduino-esp8266.readthedocs.io/en/latest/installing.html) the ESP8266 Arduino Core.
 2. Follow this [tutorial](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) to install the file system uploader, but use [this LittleFS plugin](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin) instead of SPIFFS. 
-3. Arduino IDE->Tools->Board->ESP8266 Boards, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
+3. ```Arduino IDE->Tools->Board->ESP8266 Boards```, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
 4. Install the [Fuzzy Spooder](https://github.com/FuzzyNoodle/Fuzzy-Spooder) using the the [Arduino Library Manager](https://www.arduino.cc/en/guide/libraries#toc3). 
 5. Starting with IDE v1.8.10, the following library dependencies will be prompted to install: (If not being prompted, please install them maually.)
     1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.4.2
@@ -24,8 +24,8 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
     6. [ArduinoJson](https://github.com/bblanchon/ArduinoJson) by Benoit Blanchon, version 6.17.3
 
 
-6. Open the File->Examples->Fuzzy Spooder->NoWifi_Demo sketch and upload to your board via USB connection. Correct port needs to be selected.
-7. [Upload](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) the data files in the \data folder too.
+6. Open the ```File->Examples->Fuzzy Spooder->NoWifi_Demo``` sketch and upload to your board via USB connection. Correct port needs to be selected.
+7. [Upload](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) the data files in the \data folder too. See below.
 
 
 #### Using VSCode IDE + platformio extension
@@ -39,6 +39,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 4. On the same page, select and copy all the sketch code from the NoWifi_Demo
 5. Open ```VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->main.cpp```. Paste and overwrite the example sketch code copied from previous step.
 6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
+7. [Upload](https://diyprojects.io/esp8266-upload-data-folder-spiffs-littlefs-platformio) the data files in the \data folder too. See below.
 
 Additional note:
 The default platformio.ini configuration would be something like:
@@ -57,10 +58,11 @@ Modify the configuration section to:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
+board_build.filesystem = littlefs
+board_build.ldscript = eagle.flash.4m1m.ld
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
-board_build.filesystem = littlefs
 lib_deps = georgychen/Fuzzy Spooder@^0.3.0
 
 ```
@@ -68,12 +70,12 @@ This creates a more user friendly env:name, increases upload speed and enables s
 
 ---
 
-### Upload the config.json file to the file system
-An ESP8266 file system is used in this project. The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
+### Upload the data folder to the file system
+The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
 
-Currently it contains:
+For example, the data folder contains:
 - The logo.bmp shown during booting. It can be replaced by user.
-- The config.json file, where all configuration are edited and stored.
+- The config.json file, where all configurations are edited and stored.
 
 #### Using Arduino IDE
 1. Copy the 'data' folder from the 
