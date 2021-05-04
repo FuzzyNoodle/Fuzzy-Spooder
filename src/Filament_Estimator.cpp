@@ -54,7 +54,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     else
     {
         Serial.println(F("LittleFS file system mounted."));
-        listDir("");
+        //listDir("");
     }
 
     displayMonoBitmap("/images/logo.bmp");
@@ -132,8 +132,8 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     //Setup for settings and eeprom
     EEPROM.begin(DECLARED_EEPROM_SIZE);
     //setting.calValue = 3.14159;
-    Serial.print(F("Size of setting struct: "));
-    Serial.println((uint32_t)sizeof(setting));
+    //Serial.print(F("Size of setting struct: "));
+    //Serial.println((uint32_t)sizeof(setting));
 
     //Load eeprom data to setting
     loadToSetting();
@@ -157,12 +157,18 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     }
     if (isnan(setting.calValue))
     {
+        Serial.println(F("EEPROM calValue invalid, using default value."));
         setting.calValue = DEFAULT_CALIBRATION_VALUE;
+        isDirty = true;
+    }
+    if (setting.spoolHolderWeight < 0 or setting.spoolHolderWeight > 999)
+    {
+        Serial.println(F("EEPROM spool holder weight invalid, using default value."));
+        setting.spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
         isDirty = true;
     }
     if (isDirty == true)
     {
-        Serial.println(F("Saving default values to EEPROM."));
         saveToEEPROM();
     }
     //Compare firmware version
@@ -184,31 +190,15 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         //Same version
     }
 
-    dumpSetting();
-    //Setup for version and setting
-    //setting.version.major = curretVersionMajor;
-    //setting.version.minor = curretVersionMinor;
-    //setting.version.patch = curretVersionPatch;
+    //dumpSetting();
 
-    // EEPROM.get(EEPROM_CALIBRATE_VALUE, calibrateValue);
-
-    // if (isnan(calibrateValue) == true)
-    // {
-    //     //not a number
-    //     Serial.println("EEPROM Calibrate value is nan");
-    //     Serial.println("Reset to 1.0 and save to EEROPM.");
-    //     calibrateValue = 1.0;
-    //     EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
-    //     EEPROM.commit();
-    //     Serial.println("Perform a calibration after start up.");
-    // }
-
-    // Serial.print("EEPROM Calibrate value = ");
-    // Serial.println(calibrateValue);
+    //load config file
+    loadConfig();
+    dumpConfig();
 
     loadcell.begin();
     loadcell.start(stabilizingTime, false);
-    loadcell.setCalFactor(calibrateValue);
+    loadcell.setCalFactor(setting.calValue);
     tare();
     Serial.println("Setup completed.");
 
@@ -234,7 +224,7 @@ void FILAMENT_ESTIMATOR::update(void)
     if (newDataReady == true)
     {
         totalWeight = loadcell.getData();
-        filamentWeight = totalWeight - spoolHolderWeight;
+        filamentWeight = totalWeight - setting.spoolHolderWeight;
     }
     updateHomepage();
     if (drawTareMessage == true)
@@ -245,6 +235,10 @@ void FILAMENT_ESTIMATOR::update(void)
     if (calibrateEditDigitMode == true)
     {
         checkCalibrateEditModeTimer();
+    }
+    if (spoolHolderEditDigitMode == true)
+    {
+        checkSpoolHolderEditModeTimer();
     }
 }
 void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
@@ -262,6 +256,9 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case MENU_CALIBRATE:
                 setPage(PAGE_CALIBRATE);
+                break;
+            case MENU_SPOOL_HOLDER_WEIGHT:
+                setPage(PAGE_SPOOL_HOLDER_WEIGHT);
                 break;
             case MENU_DEBUG:
                 setPage(PAGE_DEBUG);
@@ -332,14 +329,60 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             }
             break;
+        case PAGE_SPOOL_HOLDER_WEIGHT:
+            switch (spoolHolderSelection)
+            {
+
+            case SPOOL_HOLDER_3_DIGIT:
+            case SPOOL_HOLDER_2_DIGIT:
+            case SPOOL_HOLDER_1_DIGIT:
+                if (spoolHolderEditDigitMode == false)
+                {
+                    spoolHolderEditDigitMode = true;
+                    displaySpoolHolderDigit = false;
+                    displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    spoolHolderEditModerTimer = millis();
+                }
+                else
+                {
+                    spoolHolderEditDigitMode = false;
+                    displaySpoolHolderDigit = true;
+                    displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                }
+                break;
+            case SPOOL_HOLDER_OK:
+                spoolHolderEditDigitMode = false;
+                //Reset the selection to the third digit, for next entry
+                spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
+                setCurrentSpoolHolderWeight(getSpoolHolderWeight());
+                setPage(PAGE_MENU);
+                break;
+            case SPOOL_HOLDER_CANCEL:
+                spoolHolderEditDigitMode = false;
+                //Reset the selection to the third digit, for next entry
+                spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
+                setPage(PAGE_MENU);
+                break;
+            default: //other than above, which means loading preset slot value into current weight
+            {
+                uint8_t slotIndex = spoolHolderSelection - SPOOL_HOLDER_SLOT_1;
+                spoolHolder3Digit = (spoolHolderSlotWeight[slotIndex] / 100U) % 10;
+                spoolHolder2Digit = (spoolHolderSlotWeight[slotIndex] / 10U) % 10;
+                spoolHolder1Digit = (spoolHolderSlotWeight[slotIndex] / 1U) % 10;
+                spoolHolderSelection = SPOOL_HOLDER_OK;
+                displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                break;
+            }
+            }
+            break;
         case PAGE_CALIBRATE_CONFIRM:
 
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_OK:
-                calibrateValue = newCalibrationValue;
-                EEPROM.put(EEPROM_CALIBRATE_VALUE, calibrateValue);
-                EEPROM.commit();
+
+                setting.calValue = newCalibrationValue;
+                saveToEEPROM();
                 break;
             case CALIBRATE_SAVE_CANCEL:
                 //Reset the selection to ok
@@ -366,8 +409,22 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case DEBUG_ERASE_EEPROM:
                 eraseEEPROM();
                 break;
+            case DEBUG_LIST_DIRECTORY:
+                listDir("");
+                break;
+            case DEBUG_LOAD_CONFIG:
+                loadConfig();
+                break;
+            case DEBUG_DUMP_CONFIG:
+                dumpConfig();
+                break;
+            case DEBUG_REBOOT:
+                Serial.println(F("Reboot spooder."));
+                ESP.restart();
+                break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
+                debugMenuItemStartIndex = DEBUG_LOAD_TO_SETTING;
                 setPage(PAGE_MENU);
                 break;
             }
@@ -491,6 +548,58 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_SPOOL_HOLDER_WEIGHT:
+            switch (spoolHolderEditDigitMode)
+            {
+            case true:
+                switch (spoolHolderSelection)
+                {
+                case SPOOL_HOLDER_3_DIGIT:
+                    if (spoolHolder3Digit > 0)
+                    {
+                        spoolHolder3Digit--;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                case SPOOL_HOLDER_2_DIGIT:
+                    if (spoolHolder2Digit > 0)
+                    {
+                        spoolHolder2Digit--;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                case SPOOL_HOLDER_1_DIGIT:
+                    if (spoolHolder1Digit > 0)
+                    {
+                        spoolHolder1Digit--;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (spoolHolderSelection > SPOOL_HOLDER_3_DIGIT)
+                {
+                    spoolHolderSelection = spoolHolderSelection - 1;
+                    if (spoolHolderSelection < spoolHolderSlotStartIndex)
+                    {
+                        spoolHolderSlotStartIndex--;
+                        if (spoolHolderSlotStartIndex < SPOOL_HOLDER_SLOT_1)
+                        {
+                            spoolHolderSlotStartIndex = SPOOL_HOLDER_SLOT_1;
+                        }
+                    }
+                    setPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                }
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             if (debugMenuSelection > DEBUG_LOAD_TO_SETTING)
             {
@@ -591,6 +700,72 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             case CALIBRATE_SAVE_OK:
                 calibrateSaveSelection = CALIBRATE_SAVE_CANCEL;
                 displayPage(PAGE_CALIBRATE_CONFIRM);
+                break;
+            }
+            break;
+        case PAGE_SPOOL_HOLDER_WEIGHT:
+            switch (spoolHolderEditDigitMode)
+            {
+            case true:
+                switch (spoolHolderSelection)
+                {
+                case SPOOL_HOLDER_3_DIGIT:
+                    if (spoolHolder3Digit < 9)
+                    {
+                        spoolHolder3Digit++;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                case SPOOL_HOLDER_2_DIGIT:
+                    if (spoolHolder2Digit < 9)
+                    {
+                        spoolHolder2Digit++;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                case SPOOL_HOLDER_1_DIGIT:
+                    if (spoolHolder1Digit < 9)
+                    {
+                        spoolHolder1Digit++;
+                        displaySpoolHolderDigit = true;
+                        spoolHolderEditModerTimer = millis();
+                        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (spoolHolderSelection < SPOOL_HOLDER_CANCEL + spoolHolderSlotSize)
+                {
+                    if (spoolHolderSelection != SPOOL_HOLDER_CANCEL)
+                    {
+                        spoolHolderSelection = spoolHolderSelection + 1;
+                        if (spoolHolderSelection - spoolHolderSlotStartIndex == 3)
+                        {
+                            spoolHolderSlotStartIndex++;
+                        }
+                    }
+                    else
+                    {
+                        if (spoolHolderSlotStartIndex == SPOOL_HOLDER_SLOT_1)
+                        {
+                            spoolHolderSelection = spoolHolderSelection + 1;
+                            if (spoolHolderSelection - spoolHolderSlotStartIndex == 3)
+                            {
+                                spoolHolderSlotStartIndex++;
+                            }
+                        }
+                        else //menu was rotated before, return to ok after pressing,then rotate right
+                        {
+                            spoolHolderSelection = spoolHolderSlotStartIndex;
+                        }
+                    }
+                    setPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                }
                 break;
             }
             break;
@@ -706,9 +881,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.fillRect(6, 22, 4, 26);
             display.fillRect(27, 22, 4, 26);
             display.fillRect(11, 28, 15, 13);
-            if (abs(spoolHolderWeight) < 9999)
+            if (abs(setting.spoolHolderWeight) < 1000)
             {
-                display.drawString(90, 20, String(spoolHolderWeight, 0));
+                display.drawString(90, 20, String(setting.spoolHolderWeight));
                 //Draw unit
                 display.setFont(ArialMT_Plain_10);
                 display.drawString(100, 32, "g");
@@ -728,8 +903,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(display.getWidth() / 2, 0, "INFO");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
-        display.drawString(6, 12, "CAL Value: " + String(calibrateValue));
-        display.drawString(6, 22, "Spool: " + String(uint16_t(spoolHolderWeight)));
+        display.drawString(6, 12, "CAL Value: " + String(setting.calValue));
+        display.drawString(6, 22, "Spool: " + String(uint16_t(setting.spoolHolderWeight)));
 
         drawRightIndicator(1);
         display.display();
@@ -858,7 +1033,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(display.getWidth() / 2, 0, "Calibrate - Confirm");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
-        display.drawString(6, 12, "Old value: " + String(calibrateValue));
+        display.drawString(6, 12, "Old value: " + String(setting.calValue));
         display.drawString(6, 22, "New value: " + String(newCalibrationValue));
         display.drawString(6, 32, "Save data?");
 
@@ -876,6 +1051,102 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         display.display();
         break;
+    case PAGE_SPOOL_HOLDER_WEIGHT:
+    { //need this because variable is defined in case
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Spool Holder Weight");
+        display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.setFont(ArialMT_Plain_16);
+
+        uint8_t x = 22;
+        uint8_t y = 16;
+
+        switch (spoolHolderSelection)
+        {
+        case SPOOL_HOLDER_3_DIGIT:
+
+            if (displaySpoolHolderDigit == true)
+            {
+                display.drawString(x, y, String(spoolHolder3Digit));
+            }
+            display.drawString(x + 20, y, String(spoolHolder2Digit));
+            display.drawString(x + 40, y, String(spoolHolder1Digit));
+            drawTriangle(x - 6, y + 9);
+            break;
+        case SPOOL_HOLDER_2_DIGIT:
+
+            display.drawString(x, y, String(spoolHolder3Digit));
+            if (displaySpoolHolderDigit == true)
+            {
+                display.drawString(x + 20, y, String(spoolHolder2Digit));
+            }
+            display.drawString(x + 40, y, String(spoolHolder1Digit));
+            drawTriangle(x - 6 + 20, y + 9);
+            break;
+        case SPOOL_HOLDER_1_DIGIT:
+
+            display.drawString(x, y, String(spoolHolder3Digit));
+            display.drawString(x + 20, y, String(spoolHolder2Digit));
+            if (displaySpoolHolderDigit == true)
+            {
+                display.drawString(x + 40, y, String(spoolHolder1Digit));
+            }
+            drawTriangle(x - 6 + 40, y + 9);
+            break;
+        case SPOOL_HOLDER_OK:
+            display.drawString(x, y, String(spoolHolder3Digit));
+            display.drawString(x + 20, y, String(spoolHolder2Digit));
+            display.drawString(x + 40, y, String(spoolHolder1Digit));
+            drawTriangle(90, 20);
+            break;
+        case SPOOL_HOLDER_CANCEL:
+            display.drawString(x, y, String(spoolHolder3Digit));
+            display.drawString(x + 20, y, String(spoolHolder2Digit));
+            display.drawString(x + 40, y, String(spoolHolder1Digit));
+            drawTriangle(90, 30);
+            break;
+        default:
+            display.drawString(x, y, String(spoolHolder3Digit));
+            display.drawString(x + 20, y, String(spoolHolder2Digit));
+            display.drawString(x + 40, y, String(spoolHolder1Digit));
+            break;
+        }
+        display.setFont(ArialMT_Plain_10);
+        display.drawString(96, 14, "Ok");
+        display.drawString(96, 24, "Cancel");
+
+        //display slot menu
+        if (spoolHolderSlotSize == 0)
+        {
+            return;
+        }
+        uint8_t nameX = 20;
+        uint8_t nameY = 34;
+        uint8_t weightX = 96;
+        for (uint8_t i = 0; i < spoolHolderSlotSize; i++)
+        {
+            display.drawString(nameX, nameY + i * 10, String(spoolHolderSlotName[spoolHolderSlotStartIndex - SPOOL_HOLDER_SLOT_1 + i]).substring(0, 12));
+            display.drawString(weightX, nameY + i * 10, String(spoolHolderSlotWeight[spoolHolderSlotStartIndex - SPOOL_HOLDER_SLOT_1 + i]));
+            if (i == 2)
+            {
+                break;
+            }
+        }
+
+        if (spoolHolderSelection > SPOOL_HOLDER_CANCEL)
+        {
+            uint8_t triangleIndex = spoolHolderSelection - spoolHolderSlotStartIndex;
+            //Serial.print("triangleIndex = ");
+            //Serial.println(triangleIndex);
+            drawTriangle(nameX - 6, nameY + 6 + (triangleIndex * 10));
+        }
+
+        display.display();
+    }
+    break;
     case PAGE_DEBUG:
         display.clear();
         display.setFont(ArialMT_Plain_10);
@@ -891,7 +1162,6 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(6, 52, debugMenuTitle[debugMenuItemStartIndex + 4]);
 
         drawLeftIndicator(debugMenuSelection - debugMenuItemStartIndex);
-
         display.display();
         break;
     default:
@@ -1030,8 +1300,19 @@ void FILAMENT_ESTIMATOR::checkCalibrateEditModeTimer()
         displayPage(PAGE_CALIBRATE);
     }
 }
+void FILAMENT_ESTIMATOR::checkSpoolHolderEditModeTimer()
+{
+    if (millis() - spoolHolderEditModerTimer > SPOOL_HOLDER_EDIT_MODE_PERIOD)
+    {
+        displaySpoolHolderDigit = !displaySpoolHolderDigit;
+        spoolHolderEditModerTimer = millis();
+        displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+    }
+}
 void FILAMENT_ESTIMATOR::setCalibrationWeight(uint16_t weight)
 {
+    if (weight > 9999)
+        weight = 9999;
     calibrate4Digit = (weight / 1000U) % 10;
     calibrate3Digit = (weight / 100U) % 10;
     calibrate2Digit = (weight / 10U) % 10;
@@ -1039,12 +1320,23 @@ void FILAMENT_ESTIMATOR::setCalibrationWeight(uint16_t weight)
 }
 uint16_t FILAMENT_ESTIMATOR::getCalibrationWeight()
 {
-    calibrationWeight = calibrate4Digit * 1000 + calibrate3Digit * 100 + calibrate2Digit * 10 + calibrate1Digit;
-    return calibrationWeight;
+    uint16_t weight = calibrate4Digit * 1000 + calibrate3Digit * 100 + calibrate2Digit * 10 + calibrate1Digit;
+    return weight;
 }
 void FILAMENT_ESTIMATOR::setCurrentSpoolHolderWeight(uint16_t weight)
 {
-    spoolHolderWeight = weight;
+    if (weight > 999)
+        weight = 999;
+    setting.spoolHolderWeight = weight;
+    saveToEEPROM();
+    spoolHolder3Digit = (weight / 100U) % 10;
+    spoolHolder2Digit = (weight / 10U) % 10;
+    spoolHolder1Digit = (weight / 1U) % 10;
+}
+uint16_t FILAMENT_ESTIMATOR::getSpoolHolderWeight()
+{
+    uint16_t weight = spoolHolder3Digit * 100 + spoolHolder2Digit * 10 + spoolHolder1Digit;
+    return weight;
 }
 void FILAMENT_ESTIMATOR::setStepsPerClick(uint8_t steps)
 {
@@ -1101,8 +1393,13 @@ void FILAMENT_ESTIMATOR::dumpSetting()
     Serial.print(setting.version.minor);
     Serial.print(F("."));
     Serial.println(setting.version.patch);
+
     Serial.print(F("  - calValue: "));
     Serial.println(setting.calValue);
+
+    Serial.print(F("  - spoolHolderWeight: "));
+    Serial.println(setting.spoolHolderWeight);
+
     Serial.println(F("Setting dump completed."));
 }
 void FILAMENT_ESTIMATOR::dumpEEPROM()
@@ -1208,9 +1505,6 @@ void FILAMENT_ESTIMATOR::_listDir(const char *dirname, uint8_t level)
     }
 
     level++;
-}
-void FILAMENT_ESTIMATOR::dumpConfig()
-{
 }
 void FILAMENT_ESTIMATOR::displayMonoBitmap(const char *filename)
 {
@@ -1333,4 +1627,64 @@ uint32_t FILAMENT_ESTIMATOR::read32(File f, uint32_t offset)
         r += f.read() << (i * 8);
     }
     return r;
+}
+void FILAMENT_ESTIMATOR::loadConfig()
+{
+    File configFile = LittleFS.open("/config.json", "r");
+    if (!configFile)
+    {
+        Serial.println(F("Failed to open config file."));
+        return;
+    }
+    configSize = configFile.size();
+    if (configSize > JSON_DOC_BUFFER_SIZE)
+    {
+        Serial.println(F("Config file size is too large"));
+        return;
+    }
+
+    //parse json content into config variables
+    deserializeJson(jsonDoc, configFile);
+    config_version = jsonDoc["config_version"]; // "0.3.0"
+    wifi_ssid = jsonDoc["wifi_ssid"];           // "your_ssid"
+    wifi_password = jsonDoc["wifi_password"];   // "your_password"
+    blynk_auth = jsonDoc["blynk_auth"];         // "your_blynk_auth_token"
+
+    uint8_t index = 0;
+    for (JsonObject elem : jsonDoc["spool_holder"].as<JsonArray>())
+    {
+        spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
+        spoolHolderSlotWeight[index] = elem["weight"]; // 180, 150, 250, 250, 250
+        index++;
+    }
+    spoolHolderSlotSize = index;
+    Serial.println(F("Config file loaded."));
+}
+void FILAMENT_ESTIMATOR::dumpConfig()
+{
+    Serial.println(F("Dump config:"));
+    Serial.println(F("Serialized jsonDoc content:"));
+    serializeJson(jsonDoc, Serial);
+    Serial.println();
+    Serial.println(F("Deserialized data:"));
+    Serial.print(F("config_version:"));
+    Serial.println(config_version);
+    Serial.print(F("wifi_ssid:"));
+    Serial.println(wifi_ssid);
+    Serial.print(F("wifi_password:"));
+    Serial.println(wifi_password);
+    Serial.print(F("blynk_auth:"));
+    Serial.println(blynk_auth);
+
+    for (uint8_t index = 0; index < spoolHolderSlotSize; index++)
+    {
+        Serial.print(F("name:"));
+        Serial.print(spoolHolderSlotName[index]);
+        Serial.print(F("  weight:"));
+        Serial.println(spoolHolderSlotWeight[index]);
+        index++;
+    }
+    Serial.print("spoolHolderSlotSize = ");
+    Serial.println(spoolHolderSlotSize);
+    Serial.println(F("Dump config completed."));
 }

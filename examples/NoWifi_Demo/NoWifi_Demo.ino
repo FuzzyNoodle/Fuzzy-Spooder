@@ -33,6 +33,8 @@ void setup()
   spooder.setLongClickTime(400);
 
   //Optional: set the current spool holder weight in grams
+  //Valid values from 0 to 999
+  //This function only works when there is no last used values in the EEPROM
   spooder.setCurrentSpoolHolderWeight(180);
 }
 

@@ -44,6 +44,9 @@
 #include "FS.h"
 #include <LittleFS.h>
 
+#define JSON_DOC_BUFFER_SIZE 1024
+#define SPOOL_HOLDER_MAX_SLOT_SIZE 32
+
 #ifndef DISABLE_SERIAL_DEBUG
 #define ENABLE_SERIAL_DEBUG
 #endif
@@ -70,6 +73,18 @@
 #define PAGE_CALIBRATE_CONFIRM 31
 #define PAGE_DEBUG 101
 
+#define PAGE_SPOOL_HOLDER_WEIGHT 40
+#define SPOOL_HOLDER_3_DIGIT 0
+#define SPOOL_HOLDER_2_DIGIT 1
+#define SPOOL_HOLDER_1_DIGIT 2
+#define SPOOL_HOLDER_OK 3
+#define SPOOL_HOLDER_CANCEL 4
+#define SPOOL_HOLDER_SLOT_1 5
+#define SPOOL_HOLDER_SLOT_2 6
+#define SPOOL_HOLDER_SLOT_3 7
+#define SPOOL_HOLDER_SLOT_4 8
+#define SPOOL_HOLDER_SLOT_5 9
+
 #define CALIBRATE_4_DIGIT 0
 #define CALIBRATE_3_DIGIT 1
 #define CALIBRATE_2_DIGIT 2
@@ -83,7 +98,7 @@
 
 #define MENU_TARE 0
 #define MENU_CALIBRATE 1
-#define MENU_SET_WEIGHT 2
+#define MENU_SPOOL_HOLDER_WEIGHT 2
 #define MENU_SETUP 3
 #define MENU_DEBUG 8
 #define DEBUG_LOAD_TO_SETTING 0
@@ -91,10 +106,13 @@
 #define DEBUG_DUMP_SETTING 2
 #define DEBUG_DUMP_EEPROM 3
 #define DEBUG_ERASE_EEPROM 4
-#define DEBUG_RETURN 5
+#define DEBUG_LIST_DIRECTORY 5
+#define DEBUG_LOAD_CONFIG 6
+#define DEBUG_DUMP_CONFIG 7
+#define DEBUG_REBOOT 8
+#define DEBUG_RETURN 9
 
 #define DECLARED_EEPROM_SIZE 1024
-#define EEPROM_CALIBRATE_VALUE 0
 #define EEPROM_START_ADDRESS 0
 
 #define DISPLAY_TYPE_TOTAL 0
@@ -116,6 +134,8 @@ public:
   void setCalibrationWeight(uint16_t weight);
 
   //Set the default weight in grams for the spool holder. Can be changed in the UI.
+  //Valid values from 0 to 999
+  //Value is also saved to EEPROM
   void setCurrentSpoolHolderWeight(uint16_t weight);
 
   //Set the steps per click of the rotary encoder
@@ -156,7 +176,8 @@ private:
   {
     VERSION_STRUCT version;
     float calValue;
-    /* data */
+    uint16_t spoolHolderWeight;
+
   } setting;
 
   uint8_t currentPage = PAGE_NONE;
@@ -172,7 +193,7 @@ private:
   const uint8_t numberOfMenuItems = 9;
   String menuTitle[9] = {"Tare",
                          "Calibrate",
-                         "Set Weight(X)",
+                         "Spool Holder Weight",
                          "Set Spooder ID(X)",
                          "WIFI Setup(X)",
                          "Notification(X)",
@@ -187,7 +208,7 @@ private:
   uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
 
   HX711_ADC loadcell;
-  float calibrateValue = DEFAULT_CALIBRATION_VALUE; //a default value required for next calibration
+  //float calibrateValue; //a default value required for next calibration
   float newCalibrationValue;
   // preciscion right after power-up can be improved by adding a few seconds of stabilizing time
   uint32_t stabilizingTime = 2000;
@@ -204,7 +225,6 @@ private:
   void checkTareTimer();
 
   uint8_t displayType = DISPLAY_TYPE_FILAMENT;
-  float spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
   float filamentWeight;
   float emptyThreshold = DEFAULT_EMPTY_THRESHOLD;
 
@@ -214,7 +234,7 @@ private:
   uint8_t calibrate3Digit = 0;
   uint8_t calibrate2Digit = 0;
   uint8_t calibrate1Digit = 0;
-  uint16_t getCalibrationWeight();
+  uint16_t getCalibrationWeight(); //get the weight from 4-digit UI menu
   uint16_t calibrationWeight = 0;
   void checkCalibrateEditModeTimer();
   bool displayCalibrateDigit = true;
@@ -225,14 +245,18 @@ private:
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-  uint8_t numberOfDebugMenuItems = 6;
-  String debugMenuTitle[6] = {
+  uint8_t numberOfDebugMenuItems = 10;
+  String debugMenuTitle[10] = {
       "Load To Setting",
       "Save To EEPROM",
       "Dump Setting",
       "Dump EEPROM",
       "Erase EEPROM",
-      "Return"};
+      "List Directory",
+      "Load Config",
+      "Dump Config",
+      "Reboot",
+      "Return to Menu"};
   void loadToSetting();
   void saveToEEPROM();
   void dumpSetting();
@@ -242,9 +266,36 @@ private:
 
   void listDir(const char *dirname); //List the FSn directory in a user-friendly text format
   void _listDir(const char *dirname, uint8_t level);
-  void dumpConfig(); //Pring all the config.json content for debugging purpose
+
   void displayMonoBitmap(const char *filename);
   uint32_t read32(File f, uint32_t offset);
+
+  float spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
+  uint8_t spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
+  bool spoolHolderEditDigitMode = false;
+  bool displaySpoolHolderDigit = true;
+  uint32_t spoolHolderEditModerTimer;
+  uint8_t spoolHolder3Digit = 1;
+  uint8_t spoolHolder2Digit = 8;
+  uint8_t spoolHolder1Digit = 0;
+  const uint32_t SPOOL_HOLDER_EDIT_MODE_PERIOD = 500;
+  void checkSpoolHolderEditModeTimer();
+  uint16_t getSpoolHolderWeight(); //get the weight from 3-digit UI menu
+
+  // Allocate a buffer to store contents of the file.
+  //char configBuffer[CONFIG_FILE_BUFFER_SIZE];
+  uint16_t configSize;
+  void loadConfig(); //load the config file into buffer
+  void dumpConfig(); //Pring all the config.json content for debugging purpose
+  StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDoc;
+  const char *config_version; // "0.3.0"
+  const char *wifi_ssid;      // "your_ssid"
+  const char *wifi_password;  // "your_password"
+  const char *blynk_auth;
+  const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
+  uint16_t spoolHolderSlotWeight[SPOOL_HOLDER_MAX_SLOT_SIZE];
+  uint8_t spoolHolderSlotSize = 0;
+  uint8_t spoolHolderSlotStartIndex = SPOOL_HOLDER_SLOT_1;
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
