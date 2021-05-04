@@ -30,14 +30,14 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 
 #### Using VSCode IDE + platformio extension
 
-1. PIO Home-> New Project
+1. ```PIO Home-> New Project```
     1. Name: **NoWifi_Demo** for example
     2. Board: Search "mcu" select **NodeMCU 1.0 (ESP-12E Module)**
     3. Framework: **Arduino**
-2. PIO Home->Libraries->Search and go to **"Fuzzy Spooder"**.
-3. Add to Project -> Select the project you just created. (ex. **Projects\NoWifi_Demo**). The library dependencies should be automataclly downloaded and installed.
+2. ```PIO Home->Libraries->Search``` and go to **"Fuzzy Spooder"**.
+3. Add to Project -> Select the project you just created. (ex. ```**```Projects\NoWifi_Demo```**```). The library dependencies should be automataclly downloaded and installed.
 4. On the same page, select and copy all the sketch code from the NoWifi_Demo
-5. Open VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->**main.cpp**. Paste and overwrite the example sketch code copied from previous step.
+5. Open ```VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->main.cpp```. Paste and overwrite the example sketch code copied from previous step.
 6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
 
 Additional note:
@@ -69,15 +69,26 @@ This creates a more user friendly env:name, increases upload speed and enables s
 ---
 
 ### Upload the config.json file to the file system
-An ESP8266 file system is used in this project. The data folder which contains all the files to be uploaded to the ESP8266 flash memory is at the same level as the src folder.
+An ESP8266 file system is used in this project. The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
+
+Currently it contains:
+- The logo.bmp shown during booting. It can be replaced by user.
+- The config.json file, where all configuration are edited and stored.
 
 #### Using Arduino IDE
-1. Copy the 'data' folder from the library (ex: ```arduino\libraies\Fuzzy_Spooder```) to you sketch folder (ex: ```Arduino\NoWifi_Demo```).
+1. Copy the 'data' folder from the 
+  - library (ex: ```arduino\libraies\Fuzzy_Spooder```) to your 
+  - sketch folder (ex: ```Arduino\NoWifi_Demo```).
 2. Edit the config.json file in the data folder as required. 
-3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266. 
+3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB) to save upload time.
+3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266 flash memory. 
 
 #### Using VSCode IDE + platformio extension
-1. Copy the 'data' folder from the library (ex: ```platformio_project_folder\.pio\libdeps\NoWifi_Demo\Fuzzy_Spooder```) to you project folder (ex: ```platformio_project_folder\NoWifi_Demo```).
+1. Copy the 'data' folder from the 
+  - library (ex: ```platformio_project_folder\.pio\libdeps\NoWifi_Demo\Fuzzy_Spooder```) to your 
+  - project folder (ex: ```platformio_project_folder\NoWifi_Demo```).
+2. Edit the config.json file in the data folder as required. 
+3. Use the ```PlatformIO->PROJECT TASKS->NoWifi_Demo->Platform->Upload Filesystem Image``` command to uplod the file image. Make you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
 
 ### Using the NoWifi_Demo Example
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
