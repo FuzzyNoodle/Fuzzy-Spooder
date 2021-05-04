@@ -7,6 +7,8 @@ Functions implemented:
 - Calibration
 - Gauge calibration value saving and loading to/from EEPROM
 - Gauge Tare
+- File system
+- Spool holder weight adjustment
 
 */
 #include "Filament_Estimator.h"
