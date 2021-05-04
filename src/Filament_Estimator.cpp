@@ -161,16 +161,13 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         setting.calValue = DEFAULT_CALIBRATION_VALUE;
         isDirty = true;
     }
-    if (setting.spoolHolderWeight < 0 or setting.spoolHolderWeight > 999)
-    {
-        Serial.println(F("EEPROM spool holder weight invalid, using default value."));
-        setting.spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
-        isDirty = true;
-    }
+
     if (isDirty == true)
     {
+        Serial.println(F("Initializing EEPROM"));
         saveToEEPROM();
     }
+
     //Compare firmware version
 
     if (versionToNumber(currentVersion) > versionToNumber(setting.version))
@@ -189,12 +186,20 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     {
         //Same version
     }
-
-    //dumpSetting();
+    if (setting.spoolHolderWeight < 0 or setting.spoolHolderWeight > 999)
+    {
+        Serial.print(F("EEPROM spool holder weight invalid, using default value: "));
+        Serial.println(DEFAULT_SPOOL_HOLDER_WEIGHT);
+        setting.spoolHolderWeight = DEFAULT_SPOOL_HOLDER_WEIGHT;
+        spoolHolder3Digit = (setting.spoolHolderWeight / 100U) % 10;
+        spoolHolder2Digit = (setting.spoolHolderWeight / 10U) % 10;
+        spoolHolder1Digit = (setting.spoolHolderWeight / 1U) % 10;
+        //Set flag, if spool holder weight is set by user in sketch, it will be stored to EEPROM.
+        noSpoolHolderWeightInEEPROM = true;
+    }
 
     //load config file
     loadConfig();
-    dumpConfig();
 
     loadcell.begin();
     loadcell.start(stabilizingTime, false);
@@ -354,7 +359,8 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 spoolHolderEditDigitMode = false;
                 //Reset the selection to the third digit, for next entry
                 spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
-                setCurrentSpoolHolderWeight(getSpoolHolderWeight());
+                setting.spoolHolderWeight = getSpoolHolderWeight();
+                saveToEEPROM();
                 setPage(PAGE_MENU);
                 break;
             case SPOOL_HOLDER_CANCEL:
@@ -897,6 +903,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.display();
         break;
     case PAGE_INFO:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -904,11 +911,13 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.drawString(6, 12, "CAL Value: " + String(setting.calValue));
-        display.drawString(6, 22, "Spool: " + String(uint16_t(setting.spoolHolderWeight)));
+        String f = String(setting.version.major) + "." + String(setting.version.minor) + "." + String(setting.version.patch);
+        display.drawString(6, 22, "Firmware: " + f);
 
         drawRightIndicator(1);
         display.display();
-        break;
+    }
+    break;
     case PAGE_MENU:
         display.clear();
         display.setFont(ArialMT_Plain_10);
@@ -1326,12 +1335,24 @@ uint16_t FILAMENT_ESTIMATOR::getCalibrationWeight()
 void FILAMENT_ESTIMATOR::setCurrentSpoolHolderWeight(uint16_t weight)
 {
     if (weight > 999)
+    {
         weight = 999;
-    setting.spoolHolderWeight = weight;
-    saveToEEPROM();
-    spoolHolder3Digit = (weight / 100U) % 10;
-    spoolHolder2Digit = (weight / 10U) % 10;
-    spoolHolder1Digit = (weight / 1U) % 10;
+    }
+    if (noSpoolHolderWeightInEEPROM == true)
+    {
+        Serial.print(F("Current spool holder weight set to "));
+        Serial.println(weight);
+        setting.spoolHolderWeight = weight;
+        Serial.println(F("Saving spool holder weight to EEPROM:"));
+        saveToEEPROM();
+        spoolHolder3Digit = (weight / 100U) % 10;
+        spoolHolder2Digit = (weight / 10U) % 10;
+        spoolHolder1Digit = (weight / 1U) % 10;
+    }
+    else
+    {
+        Serial.println(F("Spool holder weight exists in EEPROM. Not modified by this function."));
+    }
 }
 uint16_t FILAMENT_ESTIMATOR::getSpoolHolderWeight()
 {
@@ -1376,6 +1397,9 @@ void FILAMENT_ESTIMATOR::loadToSetting()
 {
     Serial.println(F("Load EEPROM data to setting:"));
     EEPROM.get(EEPROM_START_ADDRESS, setting);
+    spoolHolder3Digit = (setting.spoolHolderWeight / 100U) % 10;
+    spoolHolder2Digit = (setting.spoolHolderWeight / 10U) % 10;
+    spoolHolder1Digit = (setting.spoolHolderWeight / 1U) % 10;
 }
 void FILAMENT_ESTIMATOR::saveToEEPROM()
 {
@@ -1430,12 +1454,11 @@ void FILAMENT_ESTIMATOR::dumpEEPROM()
 }
 void FILAMENT_ESTIMATOR::eraseEEPROM()
 {
-    Serial.println(F("Erase EEPROM data:"));
+    Serial.println(F("EEPROM data erased."));
     for (uint16_t addr = 0; addr < DECLARED_EEPROM_SIZE; addr++)
     {
         EEPROM.write(addr, 0xff);
     }
-
     EEPROM.commit();
 }
 uint32_t FILAMENT_ESTIMATOR::versionToNumber(VERSION_STRUCT v)

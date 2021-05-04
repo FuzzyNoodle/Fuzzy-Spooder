@@ -48,7 +48,7 @@ The default platformio.ini configuration would be something like:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
-lib_deps = georgychen/Fuzzy Spooder@^0.1.2
+lib_deps = georgychen/Fuzzy Spooder@^0.3.0
 ```
 
 Modify the configuration section to:
@@ -61,12 +61,15 @@ monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
 board_build.filesystem = littlefs
-lib_deps = georgychen/Fuzzy Spooder@^0.1.2
+lib_deps = georgychen/Fuzzy Spooder@^0.3.0
 
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
 
 ---
+
+### Upload the config.json file to the file system
+
 
 ### Using the NoWifi_Demo Example
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
@@ -91,8 +94,9 @@ There are three main pages:
 
 #### Spool Holders
 Spool holder weight is a user input value in grams. The default spool holder weight can be 
-- set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method, or
-- adjusted in the spooder UI. 
+- Set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method. This method only works for the first time, where there is no previous data in the EEPROM, to prevent user set values being overridden upon reboot.
+- Adjusted in the spooder UI. 
+- Loaded from preset values.
 
-There are additional 5 slots of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
+There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 

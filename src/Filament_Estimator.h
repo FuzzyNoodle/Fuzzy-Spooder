@@ -281,6 +281,7 @@ private:
   const uint32_t SPOOL_HOLDER_EDIT_MODE_PERIOD = 500;
   void checkSpoolHolderEditModeTimer();
   uint16_t getSpoolHolderWeight(); //get the weight from 3-digit UI menu
+  bool noSpoolHolderWeightInEEPROM = false;
 
   // Allocate a buffer to store contents of the file.
   //char configBuffer[CONFIG_FILE_BUFFER_SIZE];
