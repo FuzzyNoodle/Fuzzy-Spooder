@@ -35,7 +35,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
     2. Board: Search "mcu" select **NodeMCU 1.0 (ESP-12E Module)**
     3. Framework: **Arduino**
 2. ```PIO Home->Libraries->Search``` and go to **"Fuzzy Spooder"**.
-3. Add to Project -> Select the project you just created. (ex. ```**```Projects\NoWifi_Demo```**```). The library dependencies should be automataclly downloaded and installed.
+3. Add to Project -> Select the project you just created. (ex. ```Projects\NoWifi_Demo```). The library dependencies should be automataclly downloaded and installed.
 4. On the same page, select and copy all the sketch code from the NoWifi_Demo
 5. Open ```VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->main.cpp```. Paste and overwrite the example sketch code copied from previous step.
 6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
@@ -74,15 +74,15 @@ This creates a more user friendly env:name, increases upload speed and enables s
 The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
 
 For example, the data folder contains:
-- The logo.bmp shown during booting. It can be replaced by user.
-- The config.json file, where all configurations are edited and stored.
+- The **logo.bmp** shown during booting. It can be replaced by user.
+- The **config.json** file, where all configurations are edited and stored.
 
 #### Using Arduino IDE
 1. Copy the 'data' folder from the 
   - library (ex: ```arduino\libraies\Fuzzy_Spooder```) to your 
   - sketch folder (ex: ```Arduino\NoWifi_Demo```).
 2. Edit the config.json file in the data folder as required. 
-3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB) to save upload time.
+3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB)``` to save upload time.
 3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266 flash memory. 
 
 #### Using VSCode IDE + platformio extension
@@ -91,6 +91,8 @@ For example, the data folder contains:
   - project folder (ex: ```platformio_project_folder\NoWifi_Demo```).
 2. Edit the config.json file in the data folder as required. 
 3. Use the ```PlatformIO->PROJECT TASKS->NoWifi_Demo->Platform->Upload Filesystem Image``` command to uplod the file image. Make you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
+
+---
 
 ### Using the NoWifi_Demo Example
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
@@ -112,13 +114,14 @@ There are three main pages:
   - Spool Holder Weight: Set spool holder weight, or load preset values.
   - Debug: Various debugging functions.
 
-#### Spooder ID
-
-#### Spool Holders
-Spool holder weight is a user input value in grams. The default spool holder weight can be 
+#### Spool Holder Weight
+Spool holder weight is a user input value in grams. This weight is used to estimate remaining filament weight. The default spool holder weight can be 
 - Set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method. This method only works for the first time, where there is no previous data in the EEPROM, to prevent user set values being overridden upon reboot.
 - Adjusted in the spooder UI. 
 - Loaded from preset values.
 
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
+
+
+#### Spooder ID
 
