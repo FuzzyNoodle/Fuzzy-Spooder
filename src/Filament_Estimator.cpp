@@ -59,66 +59,6 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     displayMonoBitmap("/images/logo.bmp");
 
-#ifdef ENABLE_WIFI
-    WiFi.hostname(hostname); //hostname is set here
-
-//Setup for Blynk
-#ifdef ENABLE_BLYNK
-    Blynk.begin(blynk_auth_token, ssid, password);
-    Serial.println("Blynk setup ok.");
-#else
-    WiFi.begin(ssid, password);
-#endif //ENABLE_BLYNK
-
-    //WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        Serial.print(".");
-    }
-    //Serial.println("WiFi connected.");
-    Serial.println("IP Address = ");
-    //char ipChar[30] = WiFi.localIP();
-    Serial.println(WiFi.localIP().toString());
-
-    //Start mDNS after WiFi connected
-    MDNS.begin(hostname);
-
-    server.begin();
-    Serial.println("Server ok.");
-
-    //Add service to MDNS-SD
-    MDNS.addService("http", "tcp", 80);
-    Serial.println("mDNS service ok.");
-
-    //Setup for OTA
-    ArduinoOTA.onStart([]() {
-        Serial.println("Start");
-    });
-    ArduinoOTA.onEnd([]() {
-        Serial.println("\nEnd");
-    });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    });
-    ArduinoOTA.onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR)
-            Serial.println("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR)
-            Serial.println("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR)
-            Serial.println("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR)
-            Serial.println("Receive Failed");
-        else if (error == OTA_END_ERROR)
-            Serial.println("End Failed");
-    });
-    ArduinoOTA.begin();
-    Serial.println("ArduinoOTA setup ok.");
-
-#endif //ENABLE_WIFI
-
     //Setup for rotary switch
     estimatorPointer = this;
     button.setClickHandler(outsideButtonHandler);
@@ -211,17 +151,16 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 }
 void FILAMENT_ESTIMATOR::update(void)
 {
-#ifdef ENABLE_WIFI
-    ArduinoOTA.handle();
-    server.handleClient();
-    MDNS.update();
-#endif
+    if (enableWifi == true)
+    {
+        updateWifi();
+    }
+
     button.loop();
     rotary.loop();
-#ifdef ENABLE_BLYNK
-    Blynk.run();
-#endif //ENABLE_BLYNK
-    //keyStroke();
+
+    //Blynk.run();
+
     if (loadcell.update() == true)
     {
         newDataReady = true;
@@ -245,6 +184,108 @@ void FILAMENT_ESTIMATOR::update(void)
     {
         checkSpoolHolderEditModeTimer();
     }
+}
+void FILAMENT_ESTIMATOR::setWifi(bool wifi)
+{
+    enableWifi = wifi;
+    if (enableWifi == true)
+    {
+        Serial.println(F("Wifi enabled."));
+        if (wifiStatus == WIFI_STATUS_BOOT)
+        {
+            wifiStatus = WIFI_STATUS_CONNECTING;
+            connectWifi();
+        }
+    }
+    else //(enableWifi == false)
+    {
+        Serial.println(F("Wifi disabled."));
+    }
+}
+void FILAMENT_ESTIMATOR::updateWifi()
+{
+    switch (wifiStatus)
+    {
+    case WIFI_STATUS_CONNECTING:
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            wifiStatus = WIFI_STATUS_CONNECTED;
+            Serial.println(F("Wifi connected."));
+            Serial.print("IP Address = ");
+            Serial.println(WiFi.localIP().toString());
+            beginServices();
+        }
+        break;
+    case WIFI_STATUS_CONNECTED:
+        break;
+    default:
+        break;
+    }
+    //ArduinoOTA.handle();
+    server.handleClient();
+    MDNS.update();
+}
+void FILAMENT_ESTIMATOR::connectWifi()
+{
+    //WiFi.hostname("spooder01");
+    /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+     would try to act as both a client and an access-point and could cause
+     network-issues with your other WiFi-devices on your WiFi-network. */
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifi_ssid, wifi_password);
+}
+void FILAMENT_ESTIMATOR::beginServices()
+{
+
+    server.begin();
+    MDNS.begin("spooderA1");
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("mDNS hostname: spooderA1.local");
+    /* 
+    //WiFi.hostname(hostname); //hostname is set here
+
+    //Setup for Blynk
+
+    Blynk.begin(blynk_auth_token, ssid, password);
+    Serial.println("Blynk setup ok.");
+
+    //Start mDNS after WiFi connected
+    MDNS.begin(hostname);
+
+    server.begin();
+    Serial.println("Server ok.");
+
+    //Add service to MDNS-SD
+    
+    Serial.println("mDNS service ok.");
+
+    //Setup for OTA
+    ArduinoOTA.onStart([]() {
+        Serial.println("Start");
+    });
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\nEnd");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR)
+            Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR)
+            Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR)
+            Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR)
+            Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR)
+            Serial.println("End Failed");
+    });
+    ArduinoOTA.begin();
+    Serial.println("ArduinoOTA setup ok.");
+    */
+    Serial.println(F("Services started."));
 }
 void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
 {

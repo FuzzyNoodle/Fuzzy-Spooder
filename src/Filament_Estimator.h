@@ -10,7 +10,6 @@
 #define FILAMENT_ESTIMATOR_H
 
 //#define ENABLE_BLYNK
-#define DISABLE_WIFI
 
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
@@ -51,15 +50,15 @@
 #define ENABLE_SERIAL_DEBUG
 #endif
 
-#ifndef DISABLE_WIFI
-#define ENABLE_WIFI
-#endif
-
 #define DEFAULT_SPOOL_HOLDER_WEIGHT 180
 #define DEFAULT_TOTAL_WEIGHT 1180
 #define DEFAULT_EMPTY_THRESHOLD -30
 #define DEFAULT_CALIBRATION_VALUE 250.0
 
+#define WIFI_STATUS_DISABLED 0
+#define WIFI_STATUS_BOOT 1
+#define WIFI_STATUS_CONNECTING 2
+#define WIFI_STATUS_CONNECTED 3
 #define PAGE_NONE 0
 #define PAGE_HOME 11
 #define PAGE_INFO 12
@@ -126,6 +125,10 @@ public:
   void begin(void);
   void begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token);
   void update(void);
+
+  //Optional: enable wifi function
+  void setWifi(bool wifi);
+
   void buttonHandler(Button2 &btn);
   void rotaryHandler(ESPRotary &rty);
 
@@ -179,6 +182,13 @@ private:
     uint16_t spoolHolderWeight;
 
   } setting;
+
+  //wifi related
+  bool enableWifi = false;
+  uint8_t wifiStatus = WIFI_STATUS_BOOT;
+  void updateWifi();
+  void connectWifi();
+  void beginServices();
 
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;

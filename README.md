@@ -115,6 +115,7 @@ There are three main pages:
   - Debug: Various debugging functions.
 
 #### Spool Holder Weight
+
 Spool holder weight is a user input value in grams. This weight is used to estimate remaining filament weight. The default spool holder weight can be 
 - Set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method. This method only works for the first time, where there is no previous data in the EEPROM, to prevent user set values being overridden upon reboot.
 - Adjusted in the spooder UI. 
@@ -124,4 +125,15 @@ There are additional slots (up to 32 maximum) of preset spool holders, each with
 
 
 #### Spooder ID
+
+---
+
+## Manage Multiple Spooders
+
+### Scanning for Devices
+
+#### Bonjour Browser
+
+- [Bonjour Browser](https://play.google.com/store/apps/details?id=de.wellenvogel.bonjourbrowser) for Android
+- [Bonjour Browser](https://hobbyistsoftware.com/bonjourbrowser) for Windows
 
