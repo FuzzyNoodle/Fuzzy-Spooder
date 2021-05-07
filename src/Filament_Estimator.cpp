@@ -184,6 +184,12 @@ void FILAMENT_ESTIMATOR::update(void)
     {
         checkSpoolHolderEditModeTimer();
     }
+    if (setSpooderIDEditMode == true)
+    {
+        checkSetSpooderIDEditModeTimer();
+    }
+    checkConnectionStatus();
+    checkConnectionDisplaySymbol();
 }
 void FILAMENT_ESTIMATOR::setWifi(bool wifi)
 {
@@ -223,7 +229,10 @@ void FILAMENT_ESTIMATOR::updateWifi()
     }
     //ArduinoOTA.handle();
     server.handleClient();
-    MDNS.update();
+    if (MDNS.isRunning())
+    {
+        MDNS.update();
+    }
 }
 void FILAMENT_ESTIMATOR::connectWifi()
 {
@@ -238,9 +247,8 @@ void FILAMENT_ESTIMATOR::beginServices()
 {
 
     server.begin();
-    MDNS.begin("spooderA1");
-    MDNS.addService("http", "tcp", 80);
-    Serial.println("mDNS hostname: spooderA1.local");
+    beginmDNS();
+
     /* 
     //WiFi.hostname(hostname); //hostname is set here
 
@@ -287,6 +295,91 @@ void FILAMENT_ESTIMATOR::beginServices()
     */
     Serial.println(F("Services started."));
 }
+void FILAMENT_ESTIMATOR::beginmDNS()
+{
+    if (MDNS.isRunning())
+    {
+        Serial.println(F("mDNS already running."));
+
+        if (MDNS.setHostname(hostname) == true)
+        {
+            Serial.print(F("Hostname changed to: "));
+            Serial.println(hostname);
+        }
+
+        return;
+    }
+    if (validSpooderIDInEEPROM == true)
+    {
+        Serial.print(F("Starting mDNS as: "));
+        Serial.print(hostname);
+        if (MDNS.begin(hostname) == true)
+        {
+            Serial.println(F(" succeeded."));
+            MDNS.addService("http", "tcp", 80);
+        }
+        else
+        {
+            Serial.println(" failed.");
+        }
+    }
+    else
+    {
+        Serial.println("Invalid spooder ID, mDNS not started.");
+    }
+}
+void FILAMENT_ESTIMATOR::checkConnectionStatus()
+{
+    if (millis() - checkConnectionTimer < CHECK_CONNECTION_PERIOD)
+        return;
+    if (enableWifi == false)
+    {
+        connectionStatus = CONNECTION_STATUS_NONE;
+        return;
+    }
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        connectionStatus = CONNECTION_STATUS_WIFI_AND_INTERNET;
+        //Todo: check internet connection
+        return;
+    }
+    else
+    {
+        connectionStatus = CONNECTION_STATUS_NO_WIFI;
+    }
+
+    checkConnectionTimer = millis();
+}
+void FILAMENT_ESTIMATOR::checkConnectionDisplaySymbol()
+{
+    switch (connectionStatus)
+    {
+    case CONNECTION_STATUS_NONE:
+        symbolType = SYMBOL_NONE;
+        break;
+    case CONNECTION_STATUS_NO_WIFI:
+        symbolType = SYMBOL_NO_WIFI;
+        break;
+    case CONNECTION_STATUS_WIFI_AND_INTERNET:
+        symbolType = SYMBOL_WIFI_AND_INTERNET;
+        break;
+    case CONNECTION_STATUS_WIFI_NO_INTERNET:
+        if (millis() - checkConnectionDisplaySymbolTimer > CHANGE_CONNECTION_SYMBOL_PERIOD)
+        {
+            if (symbolType == SYMBOL_WIFI_NO_INTERNET_1)
+            {
+                symbolType = SYMBOL_WIFI_NO_INTERNET_2;
+            }
+            else
+            {
+                symbolType = SYMBOL_WIFI_NO_INTERNET_1;
+            }
+            checkConnectionDisplaySymbolTimer = millis();
+        }
+
+        break;
+    }
+}
 void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
 {
     switch (btn.getClickType())
@@ -305,6 +398,9 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case MENU_SPOOL_HOLDER_WEIGHT:
                 setPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                break;
+            case MENU_SET_SPOODER_ID:
+                setPage(PAGE_SET_SPOODER_ID);
                 break;
             case MENU_DEBUG:
                 setPage(PAGE_DEBUG);
@@ -422,6 +518,75 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             }
             break;
+        case PAGE_SET_SPOODER_ID:
+            switch (setSpooderIDSelection)
+            {
+
+            case SET_SPOODER_ID_LETTER:
+            case SET_SPOODER_ID_NUMBER:
+                if (setSpooderIDEditMode == false)
+                {
+                    setSpooderIDEditMode = true;
+                    displaySpooderIDDigit = false;
+                    displayPage(PAGE_SET_SPOODER_ID);
+                    setSpooderIDTimer = millis();
+                }
+                else
+                {
+                    setSpooderIDEditMode = false;
+                    displaySpooderIDDigit = true;
+                    displayPage(PAGE_SET_SPOODER_ID);
+                }
+                break;
+            case SET_SPOODER_ID_OK:
+                setSpooderIDEditMode = false;
+                //Reset the selection to the letter digit, for next entry
+                setSpooderIDSelection = SET_SPOODER_ID_LETTER;
+                if (spooderIDLetter >= 1 && spooderIDLetter <= 26)
+                {
+                    if (spooderIDNumber >= 0 && spooderIDNumber <= 99)
+                    {
+                        //valid new spooder ID
+                        setting.spooderIDLetter = spooderIDLetter;
+                        setting.spooderIDNumber = spooderIDNumber;
+                        setting.spooderIDSetStatus = SPOODER_ID_USER_SET;
+                        saveToEEPROM();
+                        validSpooderIDInEEPROM = true;
+                        hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
+                        Serial.print("Reset hostname to: ");
+                        Serial.println(hostname);
+                        beginmDNS();
+                    }
+                }
+
+                //saveToEEPROM();
+
+                setPage(PAGE_MENU);
+                break;
+            case SET_SPOODER_ID_CANCEL:
+                spoolHolderEditDigitMode = false;
+                //Reset the selection to the letter digit, for next entry
+                setSpooderIDSelection = SET_SPOODER_ID_LETTER;
+                if (validSpooderIDInEEPROM == false)
+                {
+                    //reset to invalid value for next entry
+                    spooderIDLetter = 0;
+                    spooderIDNumber = 0;
+                }
+                setPage(PAGE_MENU);
+                break;
+            default: //other than above, which means loading preset slot value into current weight
+            {
+                uint8_t slotIndex = spoolHolderSelection - SPOOL_HOLDER_SLOT_1;
+                spoolHolder3Digit = (spoolHolderSlotWeight[slotIndex] / 100U) % 10;
+                spoolHolder2Digit = (spoolHolderSlotWeight[slotIndex] / 10U) % 10;
+                spoolHolder1Digit = (spoolHolderSlotWeight[slotIndex] / 1U) % 10;
+                spoolHolderSelection = SPOOL_HOLDER_OK;
+                displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
+                break;
+            }
+            }
+            break;
         case PAGE_CALIBRATE_CONFIRM:
 
             switch (calibrateSaveSelection)
@@ -438,6 +603,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             setPage(PAGE_MENU);
             break;
+
         case PAGE_DEBUG:
             switch (debugMenuSelection)
             {
@@ -647,6 +813,41 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_SET_SPOODER_ID:
+            switch (setSpooderIDEditMode)
+            {
+            case true:
+                switch (setSpooderIDSelection)
+                {
+                case SET_SPOODER_ID_LETTER:
+                    if (spooderIDLetter > 1)
+                    {
+                        spooderIDLetter--;
+                        displaySpooderIDDigit = true;
+                        setSpooderIDTimer = millis();
+                        displayPage(PAGE_SET_SPOODER_ID);
+                    }
+                    break;
+                case SET_SPOODER_ID_NUMBER:
+                    if (spooderIDNumber > 1)
+                    {
+                        spooderIDNumber--;
+                        displaySpooderIDDigit = true;
+                        setSpooderIDTimer = millis();
+                        displayPage(PAGE_SET_SPOODER_ID);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (setSpooderIDSelection > SET_SPOODER_ID_LETTER)
+                {
+                    setSpooderIDSelection = setSpooderIDSelection - 1;
+                    setPage(PAGE_SET_SPOODER_ID);
+                }
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             if (debugMenuSelection > DEBUG_LOAD_TO_SETTING)
             {
@@ -816,6 +1017,41 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_SET_SPOODER_ID:
+            switch (setSpooderIDEditMode)
+            {
+            case true:
+                switch (setSpooderIDSelection)
+                {
+                case SET_SPOODER_ID_LETTER:
+                    if (spooderIDLetter < 26)
+                    {
+                        spooderIDLetter++;
+                        displaySpooderIDDigit = true;
+                        setSpooderIDTimer = millis();
+                        displayPage(PAGE_SET_SPOODER_ID);
+                    }
+                    break;
+                case SET_SPOODER_ID_NUMBER:
+                    if (spooderIDNumber < 99)
+                    {
+                        spooderIDNumber++;
+                        displaySpooderIDDigit = true;
+                        setSpooderIDTimer = millis();
+                        displayPage(PAGE_SET_SPOODER_ID);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (setSpooderIDSelection < SET_SPOODER_ID_CANCEL)
+                {
+                    setSpooderIDSelection = setSpooderIDSelection + 1;
+                    setPage(PAGE_SET_SPOODER_ID);
+                }
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             if (debugMenuSelection < (numberOfDebugMenuItems - 1))
             {
@@ -836,8 +1072,8 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 }
 bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
-    Serial.print(F("Set page:"));
-    Serial.println(page);
+    //Serial.print(F("Set page:"));
+    //Serial.println(page);
     previousPage = currentPage;
     currentPage = page;
     displayPage(currentPage);
@@ -939,6 +1175,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         }
 
+        drawSymbols();
+
         drawOverlay();
 
         display.display();
@@ -951,10 +1189,12 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(display.getWidth() / 2, 0, "INFO");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
-        display.drawString(6, 12, "CAL Value: " + String(setting.calValue));
+        display.drawString(6, 12, "Name: " + String(hostname));
         String f = String(setting.version.major) + "." + String(setting.version.minor) + "." + String(setting.version.patch);
         display.drawString(6, 22, "Firmware: " + f);
+        display.drawString(6, 32, "CAL Value: " + String(setting.calValue));
 
+        drawSymbols();
         drawRightIndicator(1);
         display.display();
     }
@@ -976,6 +1216,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawRightIndicator(2);
 
         drawLeftIndicator(menuIndex - menuItemStartIndex);
+
+        drawSymbols();
+
         drawOverlay();
         display.display();
         break;
@@ -1197,6 +1440,107 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.display();
     }
     break;
+    case PAGE_SET_SPOODER_ID:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Set Spooder ID");
+        display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.setFont(ArialMT_Plain_24);
+        uint8_t x = 24;
+        uint8_t y = 16;
+        uint8_t ok = 62;
+
+        uint8_t displayLetter;
+
+        if (spooderIDLetter == 0)
+        {
+            displayLetter = 45; //"-"
+        }
+        else
+        {
+            displayLetter = spooderIDLetter + 64; //Starting with A
+        }
+
+        switch (setSpooderIDSelection)
+        {
+        case SET_SPOODER_ID_LETTER:
+            if (displaySpooderIDDigit == true)
+            {
+                display.drawString(x, y, String((char)(displayLetter)));
+            }
+            if (spooderIDNumber == 0)
+            {
+                display.drawString(x + 24, y, "-");
+            }
+            else
+            {
+                display.drawString(x + 24, y, String(spooderIDNumber));
+            }
+
+            drawTriangle(x - 6, y + 13);
+
+            break;
+        case SET_SPOODER_ID_NUMBER:
+            display.drawString(x, y, String((char)(displayLetter)));
+            if (displaySpooderIDDigit == true)
+            {
+                if (spooderIDNumber == 0)
+                {
+                    display.drawString(x + 24, y, "-");
+                }
+                else
+                {
+                    display.drawString(x + 24, y, String(spooderIDNumber));
+                }
+            }
+            drawTriangle(x - 6 + 24, y + 13);
+            break;
+        case SET_SPOODER_ID_OK:
+            display.drawString(x, y, String((char)(displayLetter)));
+            if (spooderIDNumber == 0)
+            {
+                display.drawString(x + 24, y, "-");
+            }
+            else
+            {
+                display.drawString(x + 24, y, String(spooderIDNumber));
+            }
+
+            drawTriangle(x - 6 + ok, y + 8);
+            break;
+        case SET_SPOODER_ID_CANCEL:
+            display.drawString(x, y, String((char)(displayLetter)));
+            if (spooderIDNumber == 0)
+            {
+                display.drawString(x + 24, y, "-");
+            }
+            else
+            {
+                display.drawString(x + 24, y, String(spooderIDNumber));
+            }
+            drawTriangle(x - 6 + ok, y + 8 + 10);
+            break;
+        }
+        display.setFont(ArialMT_Plain_10);
+        display.drawString(x + ok, y + 2, "Ok");
+        display.drawString(x + ok, y + 12, "Cancel");
+
+        if (spooderIDLetter != 0 && spooderIDNumber != 0)
+        {
+            display.setFont(ArialMT_Plain_16);
+            String host = "spooder";
+            host += String((char)(displayLetter));
+            host += String(spooderIDNumber);
+            host += ".local";
+            display.drawString(2, 44, host);
+        }
+        display.display();
+    }
+    break;
     case PAGE_DEBUG:
         display.clear();
         display.setFont(ArialMT_Plain_10);
@@ -1214,6 +1558,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawLeftIndicator(debugMenuSelection - debugMenuItemStartIndex);
         display.display();
         break;
+
     default:
         break;
     }
@@ -1271,6 +1616,60 @@ void FILAMENT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
     display.drawLine(x + 2, y - 2, x + 2, y + 2);
     display.drawLine(x + 3, y - 1, x + 3, y + 1);
     display.drawLine(x + 4, y, x + 4, y);
+}
+void FILAMENT_ESTIMATOR::drawSymbols()
+{
+    //wifi and interent connection symbol
+    uint8_t x = 117;
+    uint8_t y = 0;
+    switch (symbolType)
+    {
+    case SYMBOL_NONE: //wifi off
+        break;
+    case SYMBOL_NO_WIFI: //wifi on but not connected
+        break;
+    case SYMBOL_WIFI_AND_INTERNET: //wifi and internet connected
+        display.drawHorizontalLine(x + 2, y + 1, 6);
+        display.drawHorizontalLine(x + 1, y + 2, 8);
+        display.drawHorizontalLine(x, y + 3, 3);
+        display.drawHorizontalLine(x + 7, y + 3, 3);
+        display.drawHorizontalLine(x, y + 4, 2);
+        display.drawHorizontalLine(x + 8, y + 4, 2);
+        display.setPixel(x, y + 5);
+        display.setPixel(x + 9, y + 5);
+        display.drawHorizontalLine(x + 3, y + 5, 4);
+        display.drawHorizontalLine(x + 2, y + 6, 6);
+        display.setPixel(x + 2, y + 7);
+        display.setPixel(x + 7, y + 7);
+        display.drawHorizontalLine(x + 4, y + 8, 2);
+        display.drawHorizontalLine(x + 4, y + 9, 2);
+        break;
+    case SYMBOL_WIFI_NO_INTERNET_1: //wifi but no internet flashing icon 1
+        display.drawVerticalLine(x, y + 3, 3);
+        display.drawVerticalLine(x + 9, y + 3, 3);
+        display.drawVerticalLine(x + 1, y + 2, 3);
+        display.drawVerticalLine(x + 8, y + 2, 3);
+        display.drawVerticalLine(x + 2, y + 6, 2);
+        display.drawVerticalLine(x + 7, y + 6, 2);
+        display.fillRect(x + 3, y, 4, 5);
+        display.fillRect(x + 4, y + 5, 2, 2);
+
+        display.drawHorizontalLine(x + 4, y + 8, 2);
+        display.drawHorizontalLine(x + 4, y + 9, 2);
+
+        break;
+    case SYMBOL_WIFI_NO_INTERNET_2: //wifi but no internet flashing icon 2
+        display.drawVerticalLine(x, y + 3, 3);
+        display.drawVerticalLine(x + 9, y + 3, 3);
+        display.drawVerticalLine(x + 1, y + 2, 3);
+        display.drawVerticalLine(x + 8, y + 2, 3);
+        display.drawVerticalLine(x + 2, y + 6, 2);
+        display.drawVerticalLine(x + 7, y + 6, 2);
+
+        break;
+    default:
+        break;
+    }
 }
 void FILAMENT_ESTIMATOR::tare()
 {
@@ -1359,6 +1758,15 @@ void FILAMENT_ESTIMATOR::checkSpoolHolderEditModeTimer()
         displayPage(PAGE_SPOOL_HOLDER_WEIGHT);
     }
 }
+void FILAMENT_ESTIMATOR::checkSetSpooderIDEditModeTimer()
+{
+    if (millis() - setSpooderIDTimer > SET_SPOODER_ID_EDIT_MODE_PERIOD)
+    {
+        displaySpooderIDDigit = !displaySpooderIDDigit;
+        setSpooderIDTimer = millis();
+        displayPage(PAGE_SET_SPOODER_ID);
+    }
+}
 void FILAMENT_ESTIMATOR::setCalibrationWeight(uint16_t weight)
 {
     if (weight > 9999)
@@ -1441,6 +1849,20 @@ void FILAMENT_ESTIMATOR::loadToSetting()
     spoolHolder3Digit = (setting.spoolHolderWeight / 100U) % 10;
     spoolHolder2Digit = (setting.spoolHolderWeight / 10U) % 10;
     spoolHolder1Digit = (setting.spoolHolderWeight / 1U) % 10;
+
+    switch (setting.spooderIDSetStatus)
+    {
+    case SPOODER_ID_USER_SET:
+    case SPOODER_ID_SYSTEM_SET:
+        spooderIDLetter = setting.spooderIDLetter;
+        spooderIDNumber = setting.spooderIDNumber;
+        validSpooderIDInEEPROM = true;
+        hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
+        break;
+    default:
+        Serial.println(F("Invalid spooder ID in EEPROM."));
+        break;
+    }
 }
 void FILAMENT_ESTIMATOR::saveToEEPROM()
 {
@@ -1464,6 +1886,15 @@ void FILAMENT_ESTIMATOR::dumpSetting()
 
     Serial.print(F("  - spoolHolderWeight: "));
     Serial.println(setting.spoolHolderWeight);
+
+    Serial.print(F("  - spooderIDSetStatus: 0x"));
+    Serial.println(setting.spooderIDSetStatus, HEX);
+
+    Serial.print(F("  - spooderIDLetter: "));
+    Serial.println(setting.spooderIDLetter);
+
+    Serial.print(F("  - spooderIDNumber: "));
+    Serial.println(setting.spooderIDNumber);
 
     Serial.println(F("Setting dump completed."));
 }

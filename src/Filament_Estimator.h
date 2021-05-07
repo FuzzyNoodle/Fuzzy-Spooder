@@ -43,6 +43,11 @@
 #include "FS.h"
 #include <LittleFS.h>
 
+//NTP
+#include <NTPClient.h>
+#include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
+
 #define JSON_DOC_BUFFER_SIZE 1024
 #define SPOOL_HOLDER_MAX_SLOT_SIZE 32
 
@@ -93,12 +98,19 @@
 #define CALIBRATE_SAVE_OK 0
 #define CALIBRATE_SAVE_CANCEL 1
 
-#define ADJUST_WEIGHT_PAGE 40
+#define PAGE_SET_SPOODER_ID 50
+#define SET_SPOODER_ID_LETTER 0
+#define SET_SPOODER_ID_NUMBER 1
+#define SET_SPOODER_ID_OK 2
+#define SET_SPOODER_ID_CANCEL 3
+#define SPOODER_ID_USER_SET 0x65
+#define SPOODER_ID_SYSTEM_SET 0x67
 
 #define MENU_TARE 0
 #define MENU_CALIBRATE 1
 #define MENU_SPOOL_HOLDER_WEIGHT 2
-#define MENU_SETUP 3
+#define MENU_SET_SPOODER_ID 3
+#define MENU_SETUP 4
 #define MENU_DEBUG 8
 #define DEBUG_LOAD_TO_SETTING 0
 #define DEBUG_SAVE_TO_EEPROM 1
@@ -117,6 +129,16 @@
 #define DISPLAY_TYPE_TOTAL 0
 #define DISPLAY_TYPE_FILAMENT 1
 #define DISPLAY_TYPE_SPOOL_HOLDER 2
+
+#define CONNECTION_STATUS_NONE 0
+#define CONNECTION_STATUS_NO_WIFI 1
+#define CONNECTION_STATUS_WIFI_AND_INTERNET 2
+#define CONNECTION_STATUS_WIFI_NO_INTERNET 3
+#define SYMBOL_NONE 0
+#define SYMBOL_NO_WIFI 1
+#define SYMBOL_WIFI_AND_INTERNET 2
+#define SYMBOL_WIFI_NO_INTERNET_1 3
+#define SYMBOL_WIFI_NO_INTERNET_2 4
 
 class FILAMENT_ESTIMATOR
 {
@@ -180,7 +202,9 @@ private:
     VERSION_STRUCT version;
     float calValue;
     uint16_t spoolHolderWeight;
-
+    byte spooderIDSetStatus;
+    uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
+    uint8_t spooderIDNumber; //1 - 99
   } setting;
 
   //wifi related
@@ -189,6 +213,7 @@ private:
   void updateWifi();
   void connectWifi();
   void beginServices();
+  void beginmDNS();
 
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;
@@ -204,7 +229,7 @@ private:
   String menuTitle[9] = {"Tare",
                          "Calibrate",
                          "Spool Holder Weight",
-                         "Set Spooder ID(X)",
+                         "Set Spooder ID",
                          "WIFI Setup(X)",
                          "Notification(X)",
                          "Spood Holder(X)",
@@ -307,6 +332,31 @@ private:
   uint16_t spoolHolderSlotWeight[SPOOL_HOLDER_MAX_SLOT_SIZE];
   uint8_t spoolHolderSlotSize = 0;
   uint8_t spoolHolderSlotStartIndex = SPOOL_HOLDER_SLOT_1;
+
+  uint8_t setSpooderIDSelection = SET_SPOODER_ID_LETTER;
+  uint8_t spooderIDLetter = 0;
+  uint8_t spooderIDNumber = 0;
+  bool setSpooderIDEditMode = false;
+  bool displaySpooderIDDigit = true;
+  bool validSpooderIDInEEPROM = false;
+  uint32_t setSpooderIDTimer;
+  void checkSetSpooderIDEditModeTimer();
+  const uint32_t SET_SPOODER_ID_EDIT_MODE_PERIOD = 500;
+  String hostname = "";
+
+  void drawSymbols();
+  uint8_t connectionStatus = CONNECTION_STATUS_NONE;
+  uint8_t symbolType = SYMBOL_NONE;
+  uint32_t displayConnectionStatusTimer;
+
+  const uint32_t CHECK_CONNECTION_PERIOD = 2000;
+  uint32_t checkConnectionTimer;
+  void checkConnectionStatus();
+  const uint32_t CHANGE_CONNECTION_SYMBOL_PERIOD = 1000;
+  uint32_t checkConnectionDisplaySymbolTimer;
+  void checkConnectionDisplaySymbol();
+
+  
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

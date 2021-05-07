@@ -95,6 +95,7 @@ For example, the data folder contains:
 ---
 
 ### Using the NoWifi_Demo Example
+
 An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
 
 A calibration needs to be done at least once with known weight.
@@ -124,16 +125,21 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
 
-#### Spooder ID
+#### Spooder ID and mDNS
+
+The user needs to set an unique Spooder ID in the UI for each unit. The ID consists of a letter (from A to Z) and a number (from 1 to 99). For example, A1, B13, C3, etc... 
+
+The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder's web page can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" works the same. If the mDNS isn't availble, IP address can always be used.
+
 
 ---
 
-## Manage Multiple Spooders
-
-### Scanning for Devices
+## Managing Multiple Spooders
 
 #### Bonjour Browser
 
+The following apps can be used to browse active **spooders** (and other mDNS devices) in your local network. 
 - [Bonjour Browser](https://play.google.com/store/apps/details?id=de.wellenvogel.bonjourbrowser) for Android
 - [Bonjour Browser](https://hobbyistsoftware.com/bonjourbrowser) for Windows
-
+- [Discovery - DNS-SD Browser](https://apps.apple.com/us/app/discovery-dns-sd-browser/id1381004916?mt=12) for macOS
+- [Discovery - DNS-SD Browser](https://apps.apple.com/us/app/discovery-dns-sd-browser/id305441017) for iOS
