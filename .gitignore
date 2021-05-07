@@ -4,7 +4,7 @@
 
 
 # PlatformIo files
-data/
+
 *.code-workspace
 .pio
 .vscode/.browse.c_cpp.db*
@@ -289,3 +289,4 @@ library.json
 
 # Personal Develop Files
 extras/ignored/
+data/config.json
