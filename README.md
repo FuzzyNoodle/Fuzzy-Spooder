@@ -93,6 +93,12 @@ For example, the data folder contains:
 3. Use the ```PlatformIO->PROJECT TASKS->NoWifi_Demo->Platform->Upload Filesystem Image``` command to uplod the file image. Make you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
 
 ---
+### OTA Upload
+#### Using Arduino IDE
+
+#### Using VSCode IDE + platformio extension
+
+---
 
 ### Using the NoWifi_Demo Example
 
@@ -131,6 +137,9 @@ The user needs to set an unique Spooder ID in the UI for each unit. The ID consi
 
 The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder's web page can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" works the same. If the mDNS isn't availble, IP address can always be used.
 
+#### Browser File System
+
+After configuring wifi, the spooder file system can be accessed using a web browser. type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
 ---
 
@@ -143,3 +152,16 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 - [Bonjour Browser](https://hobbyistsoftware.com/bonjourbrowser) for Windows
 - [Discovery - DNS-SD Browser](https://apps.apple.com/us/app/discovery-dns-sd-browser/id1381004916?mt=12) for macOS
 - [Discovery - DNS-SD Browser](https://apps.apple.com/us/app/discovery-dns-sd-browser/id305441017) for iOS
+
+
+#### Installing Blynk App for Push Notification 
+(free for limited Widget usage)
+1. Install "Blynk" App (iOS or Android)
+2. Register a Blynk account
+3. New Project 
+  - Name: ex. "Spooder"
+  - Device: "ESP8266"
+  - Connection Type: "WiFi"
+4. An unique Authorization Token (per project) will be sent to your registered email. Need to copy the code into the config.json under \data folder.   
+5. Touch the design screen, a Widgex Box appear. Place a "Notification $400" widget.
+6. Press "Play" icon on the top right corner. Done. App doesn't need to be opened thereafter.
