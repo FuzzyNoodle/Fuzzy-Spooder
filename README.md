@@ -99,7 +99,7 @@ For example, the data folder contains:
 ---
 ### OTA Upload
 #### Using Arduino IDE
-Follow this [tutorial](https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/) to upload the sketch wirelessly.
+Follow the IDE upload part in this [tutorial](https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/) to upload the sketch wirelessly.
 
 #### Using VSCode IDE + platformio extension
 Add two lines in your platformio.ini:
@@ -124,7 +124,7 @@ upload_port = spooderA1.local ;using mDNS, replace with actual name
 lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 ```
 
-After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload.
+After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload. If the mDNS hostname is not resolved, you can use the IP address.
 
 ---
 
@@ -159,7 +159,7 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
 ### Using the Wifi_Stndalone Example
-User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file.
+User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file system works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
 
 #### Spooder ID and mDNS
 
@@ -169,7 +169,7 @@ The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefi
 
 #### Browser File System
 
-After configuring wifi, the spooder file system can be accessed using a web browser. type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
+After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
 ---
 
@@ -193,4 +193,9 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
   - Connection Type: "WiFi"
 4. An unique Authorization Token (per project) will be sent to your registered email. Need to copy the code into the config.json under \data folder.   
 5. Touch the design screen, a Widgex Box appear. Place a "Notification $400" widget.
-6. Press "Play" icon on the top right corner. Done. App doesn't need to be opened thereafter.
+6. Press "Play" icon on the top right corner. Done. App doesn't need to be active for the notification to work.
+
+[Limitations:](https://github.com/blynkkk/blynkkk.github.io/blob/master/Widgets.md)
+
+- Maximum allowed body length is 120 symbols;
+- Every device can send only 1 notification every 5 seconds;
