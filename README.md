@@ -1,8 +1,11 @@
 ## Important Notice
-This library is work in progress, not ready for general usage. It is registered in PlatformIO library manger for development purpose only.
+This library is work in progress, not ready for general usage. It is registered in library manger for development purpose only.
 
 # Fuzzy-Spooder
 An add-on filament autochanger for existing 3D printers, in duel-spool configuration.
+
+- Firmware version: 0.4.0
+- Config version: 0.3.0
 
 ---
 ## Getting Started
@@ -117,9 +120,11 @@ upload_speed = 921600
 monitor_filters = send_on_enter
 upload_protocol = espota
 ;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved
-upload_port = spooderA2.local ;using mDNS
+upload_port = spooderA1.local ;using mDNS, replace with actual name
 lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 ```
+
+After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload.
 
 ---
 
