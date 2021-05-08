@@ -106,7 +106,7 @@ Add two lines in your platformio.ini:
 - upload_protocol = espota
 - upload_port = spooderA1.local
 
-Creating a env is recommended. The whole section would look like this:
+Creating a [env] is recommended. The whole section would look like this:
 
 ```
 [env:Wifi_Standlone Example Example - OTA]
