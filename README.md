@@ -49,7 +49,7 @@ The default platformio.ini configuration would be something like:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
-lib_deps = georgychen/Fuzzy Spooder@^0.3.0
+lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 ```
 
 Modify the configuration section to:
@@ -63,7 +63,7 @@ board_build.ldscript = eagle.flash.4m1m.ld
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
-lib_deps = georgychen/Fuzzy Spooder@^0.3.0
+lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
@@ -76,6 +76,7 @@ The data folder contains all the files to be uploaded to the ESP8266 flash memor
 For example, the data folder contains:
 - The **logo.bmp** shown during booting. It can be replaced by user.
 - The **config.json** file, where all configurations are edited and stored.
+- The **index.html** file for the browser file manager
 
 #### Using Arduino IDE
 1. Copy the 'data' folder from the 
@@ -95,8 +96,30 @@ For example, the data folder contains:
 ---
 ### OTA Upload
 #### Using Arduino IDE
+Follow this [tutorial](https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/) to upload the sketch wirelessly.
 
 #### Using VSCode IDE + platformio extension
+Add two lines in your platformio.ini:
+- upload_protocol = espota
+- upload_port = spooderA1.local
+
+Creating a env is recommended. The whole section would look like this:
+
+```
+[env:Wifi_Standlone Example Example - OTA]
+platform = espressif8266
+board = nodemcuv2
+framework = arduino
+board_build.filesystem = littlefs
+board_build.ldscript = eagle.flash.4m1m.ld
+monitor_speed = 115200
+upload_speed = 921600
+monitor_filters = send_on_enter
+upload_protocol = espota
+;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved
+upload_port = spooderA2.local ;using mDNS
+lib_deps = georgychen/Fuzzy Spooder@^0.4.0
+```
 
 ---
 
@@ -109,9 +132,9 @@ A calibration needs to be done at least once with known weight.
 There are three main pages:
 - **Spooder Home Page**:
   - Single click: Cycles the display mode:
-    - Total weight: measured (spool holder + filament) weight.
     - Filament weight: an estimated weight (total - spool holder weight). Displays "Empty" when the value is below a negative value.
     - Spool holder weight: an user input value, adjustable in sketch.
+    - Total weight: measured (spool holder + filament) weight.
   - Long click: Perform a tare. 
 - **Info Page**:
   - Displays additional information
@@ -130,12 +153,14 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
+### Using the Wifi_Stndalone Example
+User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file.
 
 #### Spooder ID and mDNS
 
 The user needs to set an unique Spooder ID in the UI for each unit. The ID consists of a letter (from A to Z) and a number (from 1 to 99). For example, A1, B13, C3, etc... 
 
-The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder's web page can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" works the same. If the mDNS isn't availble, IP address can always be used.
+The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" also works. If the mDNS isn't availble, IP address can always be used.
 
 #### Browser File System
 
@@ -143,7 +168,6 @@ After configuring wifi, the spooder file system can be accessed using a web brow
 
 ---
 
-## Managing Multiple Spooders
 
 #### Bonjour Browser
 
