@@ -15,6 +15,38 @@ static void outsideRotaryHandler(ESPRotary &rty) // define global handler
 {
     estimatorPointer->rotaryHandler(rty); // calls class member handler
 }
+static void outsideHandleStatus()
+{
+    estimatorPointer->handleStatus();
+}
+static void outsideHandleFileList()
+{
+    estimatorPointer->handleFileList();
+}
+static void outsideHandleGetEdit()
+{
+    estimatorPointer->handleGetEdit();
+}
+static void outsideHandleFileCreate()
+{
+    estimatorPointer->handleFileCreate();
+}
+static void outsideHandleFileDelete()
+{
+    estimatorPointer->handleFileDelete();
+}
+static void outsideHandleFileUpload()
+{
+    estimatorPointer->handleFileUpload();
+}
+static void outsideHandleNotFound()
+{
+    estimatorPointer->handleNotFound();
+}
+static void outsideReplyOK()
+{
+    estimatorPointer->replyOK();
+}
 
 FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
                                            button{BUTTON_PIN},
@@ -47,7 +79,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     Serial.println("OLED setup ok.");
 
     //Mount file system
-    if (!LittleFS.begin())
+    fileSystemConfig.setAutoFormat(false);
+    fileSystem->setConfig(fileSystemConfig);
+    fsOK = fileSystem->begin();
+    if (!fsOK)
     {
         Serial.println(F("Failed to mount file system"));
     }
@@ -159,8 +194,6 @@ void FILAMENT_ESTIMATOR::update(void)
     button.loop();
     rotary.loop();
 
-    //Blynk.run();
-
     if (loadcell.update() == true)
     {
         newDataReady = true;
@@ -171,11 +204,17 @@ void FILAMENT_ESTIMATOR::update(void)
         filamentWeight = totalWeight - setting.spoolHolderWeight;
     }
     updateHomepage();
-    if (drawTareMessage == true)
+
+    //Refresh the screen after tare message period
+    if (drawOverlayFlag == true)
     {
-        //Refresh the screen after tare message period
-        checkTareTimer();
+        if (millis() - drawOverlayTimer > overlayDisplayPeriod)
+        {
+            drawOverlayFlag = false;
+            displayPage(currentPage);
+        }
     }
+
     if (calibrateEditDigitMode == true)
     {
         checkCalibrateEditModeTimer();
@@ -190,6 +229,10 @@ void FILAMENT_ESTIMATOR::update(void)
     }
     checkConnectionStatus();
     checkConnectionDisplaySymbol();
+    if (isLogging == true)
+    {
+        updateLogging();
+    }
 }
 void FILAMENT_ESTIMATOR::setWifi(bool wifi)
 {
@@ -227,12 +270,13 @@ void FILAMENT_ESTIMATOR::updateWifi()
     default:
         break;
     }
-    //ArduinoOTA.handle();
+    ArduinoOTA.handle();
     server.handleClient();
     if (MDNS.isRunning())
     {
         MDNS.update();
     }
+    Blynk.run();
 }
 void FILAMENT_ESTIMATOR::connectWifi()
 {
@@ -246,26 +290,36 @@ void FILAMENT_ESTIMATOR::connectWifi()
 void FILAMENT_ESTIMATOR::beginServices()
 {
 
-    server.begin();
     beginmDNS();
+    beginBlynk();
 
-    /* 
-    //WiFi.hostname(hostname); //hostname is set here
+    // web server init for file system manger
+    // Filesystem status
+    server.on("/status", HTTP_GET, outsideHandleStatus);
 
-    //Setup for Blynk
+    // List directory
+    server.on("/list", HTTP_GET, outsideHandleFileList);
 
-    Blynk.begin(blynk_auth_token, ssid, password);
-    Serial.println("Blynk setup ok.");
+    // Load editor
+    server.on("/edit", HTTP_GET, outsideHandleGetEdit);
 
-    //Start mDNS after WiFi connected
-    MDNS.begin(hostname);
+    // Create file
+    server.on("/edit", HTTP_PUT, outsideHandleFileCreate);
 
+    // Delete file
+    server.on("/edit", HTTP_DELETE, outsideHandleFileDelete);
+
+    // Upload file
+    // - first callback is called after the request has ended with all parsed arguments
+    // - second callback handles file upload at that location
+    server.on("/edit", HTTP_POST, outsideReplyOK, outsideHandleFileUpload);
+
+    // Default handler for all URIs not defined above
+    // Use it to read files from filesystem
+    server.onNotFound(outsideHandleNotFound);
+
+    // Start server
     server.begin();
-    Serial.println("Server ok.");
-
-    //Add service to MDNS-SD
-    
-    Serial.println("mDNS service ok.");
 
     //Setup for OTA
     ArduinoOTA.onStart([]() {
@@ -292,7 +346,7 @@ void FILAMENT_ESTIMATOR::beginServices()
     });
     ArduinoOTA.begin();
     Serial.println("ArduinoOTA setup ok.");
-    */
+
     Serial.println(F("Services started."));
 }
 void FILAMENT_ESTIMATOR::beginmDNS()
@@ -309,7 +363,7 @@ void FILAMENT_ESTIMATOR::beginmDNS()
 
         return;
     }
-    if (validSpooderIDInEEPROM == true)
+    if (validSpooderID == true)
     {
         Serial.print(F("Starting mDNS as: "));
         Serial.print(hostname);
@@ -326,6 +380,29 @@ void FILAMENT_ESTIMATOR::beginmDNS()
     else
     {
         Serial.println("Invalid spooder ID, mDNS not started.");
+    }
+}
+void FILAMENT_ESTIMATOR::beginBlynk()
+{
+    Serial.print("Connecting Blynk:");
+    Serial.println(blynk_auth);
+
+    Blynk.config(blynk_auth);
+    Blynk.connect(3000);
+
+    if (Blynk.connected() == true)
+    {
+        blynkConnected = true;
+        Serial.println(F("Blynk connected."));
+    }
+    else
+    {
+        blynkConnected = false;
+        Serial.println(F("Blynk not connected."));
+        if (Blynk.isTokenInvalid() == true)
+        {
+            Serial.println(F("Blynk token is invalid."));
+        }
     }
 }
 void FILAMENT_ESTIMATOR::checkConnectionStatus()
@@ -551,7 +628,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                         setting.spooderIDNumber = spooderIDNumber;
                         setting.spooderIDSetStatus = SPOODER_ID_USER_SET;
                         saveToEEPROM();
-                        validSpooderIDInEEPROM = true;
+                        validSpooderID = true;
                         hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
                         Serial.print("Reset hostname to: ");
                         Serial.println(hostname);
@@ -567,7 +644,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 spoolHolderEditDigitMode = false;
                 //Reset the selection to the letter digit, for next entry
                 setSpooderIDSelection = SET_SPOODER_ID_LETTER;
-                if (validSpooderIDInEEPROM == false)
+                if (validSpooderID == false)
                 {
                     //reset to invalid value for next entry
                     spooderIDLetter = 0;
@@ -634,6 +711,19 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case DEBUG_REBOOT:
                 Serial.println(F("Reboot spooder."));
                 ESP.restart();
+                break;
+            case DEBUG_BLYNK_NOTIFY:
+                Blynk.notify(hostname + " test notification message");
+                drawOverlay("Blynk msg", "Sent", 1000);
+                Serial.println(F("Blynk notification message sent."));
+                break;
+            case DEBUG_START_LOGGING:
+                startLogging();
+                drawOverlay("Start", "Logging", 1000);
+                break;
+            case DEBUG_STOP_LOGGING:
+                stopLogging();
+                drawOverlay("Stop", "Logging", 1000);
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -1092,10 +1182,13 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
     switch (page)
     {
     case PAGE_HOME:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "SPOODER HOME");
+        String h = hostname;
+        h.toUpperCase();
+        display.drawString(display.getWidth() / 2, 0, h);
         display.drawRect(0, 12, 128, 1);
 
         drawRightIndicator(0);
@@ -1121,7 +1214,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.setPixel(23, 58);
             if (abs(totalWeight) < 9999)
             {
-                display.drawString(90, 20, String(totalWeight, 0));
+                int16_t displayWeight = totalWeight;
+                display.drawString(90, 20, String(displayWeight));
                 //Draw unit
                 display.setFont(ArialMT_Plain_10);
                 display.drawString(100, 32, "g");
@@ -1177,10 +1271,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawSymbols();
 
-        drawOverlay();
-
-        display.display();
-        break;
+        drawDisplay();
+    }
+    break;
     case PAGE_INFO:
     {
         display.clear();
@@ -1193,10 +1286,10 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         String f = String(setting.version.major) + "." + String(setting.version.minor) + "." + String(setting.version.patch);
         display.drawString(6, 22, "Firmware: " + f);
         display.drawString(6, 32, "CAL Value: " + String(setting.calValue));
-
+        display.drawString(6, 42, "IP:" + WiFi.localIP().toString());
         drawSymbols();
         drawRightIndicator(1);
-        display.display();
+        drawDisplay();
     }
     break;
     case PAGE_MENU:
@@ -1219,8 +1312,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawSymbols();
 
-        drawOverlay();
-        display.display();
+        drawDisplay();
         break;
     case PAGE_TARE:
         display.clear();
@@ -1244,7 +1336,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             drawTriangle(34, 52);
         }
 
-        display.display();
+        drawDisplay();
         break;
     case PAGE_CALIBRATE:
         display.clear();
@@ -1317,7 +1409,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.setFont(ArialMT_Plain_10);
         display.drawString(96, 36, "Ok");
         display.drawString(96, 46, "Cancel");
-        display.display();
+        drawDisplay();
         break;
     case PAGE_CALIBRATE_CONFIRM:
         display.clear();
@@ -1342,7 +1434,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         }
 
-        display.display();
+        drawDisplay();
         break;
     case PAGE_SPOOL_HOLDER_WEIGHT:
     { //need this because variable is defined in case
@@ -1437,7 +1529,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             drawTriangle(nameX - 6, nameY + 6 + (triangleIndex * 10));
         }
 
-        display.display();
+        drawDisplay();
     }
     break;
     case PAGE_SET_SPOODER_ID:
@@ -1538,7 +1630,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             host += ".local";
             display.drawString(2, 44, host);
         }
-        display.display();
+        drawDisplay();
     }
     break;
     case PAGE_DEBUG:
@@ -1556,7 +1648,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(6, 52, debugMenuTitle[debugMenuItemStartIndex + 4]);
 
         drawLeftIndicator(debugMenuSelection - debugMenuItemStartIndex);
-        display.display();
+        drawDisplay();
         break;
 
     default:
@@ -1670,12 +1762,25 @@ void FILAMENT_ESTIMATOR::drawSymbols()
     default:
         break;
     }
+    //Blynk status
+    if (Blynk.connected() == true)
+    {
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.fillRect(104 + 1, 1 + 1, 11 - 2, 10 - 1);
+        display.drawHorizontalLine(104 + 2, 1, 7);
+        display.drawVerticalLine(104, 3, 7);
+        display.drawVerticalLine(104 + 10, 3, 7);
+        display.setColor(BLACK);
+        display.drawString(106, 0, "B");
+        display.setColor(WHITE);
+    }
 }
 void FILAMENT_ESTIMATOR::tare()
 {
     loadcell.tareNoDelay();
-    drawTareMessage = true;
-    drawTareMessageTimer = millis();
+    drawOverlay("Tare", "", 1000);
     Serial.println("Tare");
 }
 void FILAMENT_ESTIMATOR::calibrate()
@@ -1688,7 +1793,7 @@ void FILAMENT_ESTIMATOR::calibrate()
     display.setFont(ArialMT_Plain_16);
     display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
     display.drawString(64, 32, "Calibrating...");
-    display.display();
+    drawDisplay();
     //refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
     calibrationWeight = getCalibrationWeight();
@@ -1708,37 +1813,43 @@ void FILAMENT_ESTIMATOR::updateHomepage()
         displayPage(PAGE_HOME);
     }
 }
-void FILAMENT_ESTIMATOR::drawOverlay()
+void FILAMENT_ESTIMATOR::drawOverlay(const char *msgLine1, const char *msgLine2, uint16_t period)
 {
-    if (drawTareMessage == true)
+    overlayMsgLine1 = msgLine1;
+    overlayMsgLine2 = msgLine2;
+    overlayDisplayPeriod = period;
+    drawOverlayFlag = true;
+    drawOverlayTimer = millis();
+    drawDisplay();
+}
+void FILAMENT_ESTIMATOR::updateOverlay()
+{
+    if (drawOverlayFlag == true)
     {
-        if (millis() - drawTareMessageTimer < DRAW_TARE_MESSAGE_PERIOD)
+
+        display.setColor(BLACK);
+        display.fillRect(6, 6, 127 - 6, 64 - 6);
+        display.setColor(WHITE);
+        display.drawRect(8, 8, 127 - 8, 64 - 8);
+        display.setFont(ArialMT_Plain_24);
+        display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+        if (String(overlayMsgLine2).length() == 0)
         {
-            display.setColor(BLACK);
-            display.fillRect(16 - 8, 12 - 4, 96 + 18, 40 + 8);
-            display.setColor(WHITE);
-            display.drawRect(16, 12, 96, 40);
-            display.setFont(ArialMT_Plain_24);
-            display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
-            display.drawString(64, 32, "TARE");
+            display.drawString(64, 35, overlayMsgLine1);
         }
         else
         {
-            drawTareMessage = false;
-            displayPage(currentPage);
+            display.drawString(64, 24, overlayMsgLine1);
+            display.drawString(64, 48, overlayMsgLine2);
         }
+
+        //display.drawString(64, 52, msg);
     }
 }
-void FILAMENT_ESTIMATOR::checkTareTimer()
+void FILAMENT_ESTIMATOR::drawDisplay()
 {
-    if (drawTareMessage == true)
-    {
-        if (millis() - drawTareMessageTimer > DRAW_TARE_MESSAGE_PERIOD)
-        {
-            drawTareMessage = false;
-            displayPage(currentPage);
-        }
-    }
+    updateOverlay();
+    display.display();
 }
 void FILAMENT_ESTIMATOR::checkCalibrateEditModeTimer()
 {
@@ -1856,7 +1967,7 @@ void FILAMENT_ESTIMATOR::loadToSetting()
     case SPOODER_ID_SYSTEM_SET:
         spooderIDLetter = setting.spooderIDLetter;
         spooderIDNumber = setting.spooderIDNumber;
-        validSpooderIDInEEPROM = true;
+        validSpooderID = true;
         hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
         break;
     default:
@@ -2110,7 +2221,7 @@ void FILAMENT_ESTIMATOR::displayMonoBitmap(const char *filename)
         }
     }
     display.drawXbm(0, 0, 128, 64, buffer);
-    display.display();
+    drawDisplay();
     f.close();
 }
 uint32_t FILAMENT_ESTIMATOR::read32(File f, uint32_t offset)
@@ -2182,4 +2293,460 @@ void FILAMENT_ESTIMATOR::dumpConfig()
     Serial.print("spoolHolderSlotSize = ");
     Serial.println(spoolHolderSlotSize);
     Serial.println(F("Dump config completed."));
+}
+void FILAMENT_ESTIMATOR::replyOK()
+{
+    server.send(200, FPSTR(TEXT_PLAIN), "");
+}
+void FILAMENT_ESTIMATOR::replyOKWithMsg(String msg)
+{
+    server.send(200, FPSTR(TEXT_PLAIN), msg);
+}
+void FILAMENT_ESTIMATOR::replyNotFound(String msg)
+{
+    server.send(404, FPSTR(TEXT_PLAIN), msg);
+}
+void FILAMENT_ESTIMATOR::replyBadRequest(String msg)
+{
+    Serial.println(msg);
+    server.send(400, FPSTR(TEXT_PLAIN), msg + "\r\n");
+}
+void FILAMENT_ESTIMATOR::replyServerError(String msg)
+{
+    Serial.println(msg);
+    server.send(500, FPSTR(TEXT_PLAIN), msg + "\r\n");
+}
+void FILAMENT_ESTIMATOR::handleStatus()
+{
+    Serial.println("handleStatus");
+    FSInfo fs_info;
+    String json;
+    json.reserve(128);
+
+    json = "{\"type\":\"";
+    json += fsName;
+    json += "\", \"isOk\":";
+    if (fsOK)
+    {
+        fileSystem->info(fs_info);
+        json += F("\"true\", \"totalBytes\":\"");
+        json += fs_info.totalBytes;
+        json += F("\", \"usedBytes\":\"");
+        json += fs_info.usedBytes;
+        json += "\"";
+    }
+    else
+    {
+        json += "\"false\"";
+    }
+    json += F(",\"unsupportedFiles\":\"");
+    json += unsupportedFiles;
+    json += "\"}";
+
+    server.send(200, "application/json", json);
+}
+void FILAMENT_ESTIMATOR::handleFileList()
+{
+    if (!fsOK)
+    {
+        return replyServerError(FPSTR(FS_INIT_ERROR));
+    }
+
+    if (!server.hasArg("dir"))
+    {
+        return replyBadRequest(F("DIR ARG MISSING"));
+    }
+
+    String path = server.arg("dir");
+    if (path != "/" && !fileSystem->exists(path))
+    {
+        return replyBadRequest("BAD PATH");
+    }
+
+    Serial.println(String("handleFileList: ") + path);
+    Dir dir = fileSystem->openDir(path);
+    path.clear();
+
+    // use HTTP/1.1 Chunked response to avoid building a huge temporary string
+    if (!server.chunkedResponseModeStart(200, "text/json"))
+    {
+        server.send(505, F("text/html"), F("HTTP1.1 required"));
+        return;
+    }
+
+    // use the same string for every line
+    String output;
+    output.reserve(64);
+    while (dir.next())
+    {
+
+        if (output.length())
+        {
+            // send string from previous iteration
+            // as an HTTP chunk
+            server.sendContent(output);
+            output = ',';
+        }
+        else
+        {
+            output = '[';
+        }
+
+        output += "{\"type\":\"";
+        if (dir.isDirectory())
+        {
+            output += "dir";
+        }
+        else
+        {
+            output += F("file\",\"size\":\"");
+            output += dir.fileSize();
+        }
+
+        output += F("\",\"name\":\"");
+        // Always return names without leading "/"
+        if (dir.fileName()[0] == '/')
+        {
+            output += &(dir.fileName()[1]);
+        }
+        else
+        {
+            output += dir.fileName();
+        }
+
+        output += "\"}";
+    }
+
+    // send last string
+    output += "]";
+    server.sendContent(output);
+    server.chunkedResponseFinalize();
+}
+bool FILAMENT_ESTIMATOR::handleFileRead(String path)
+{
+    Serial.println(String("handleFileRead: ") + path);
+    if (!fsOK)
+    {
+        replyServerError(FPSTR(FS_INIT_ERROR));
+        return true;
+    }
+
+    if (path.endsWith("/"))
+    {
+        path += "index.htm";
+    }
+
+    String contentType;
+    if (server.hasArg("download"))
+    {
+        contentType = F("application/octet-stream");
+    }
+    else
+    {
+        contentType = mime::getContentType(path);
+    }
+
+    if (!fileSystem->exists(path))
+    {
+        // File not found, try gzip version
+        path = path + ".gz";
+    }
+    if (fileSystem->exists(path))
+    {
+        File file = fileSystem->open(path, "r");
+        if (server.streamFile(file, contentType) != file.size())
+        {
+            Serial.println("Sent less data than expected!");
+        }
+        file.close();
+        return true;
+    }
+
+    return false;
+}
+String FILAMENT_ESTIMATOR::lastExistingParent(String path)
+{
+    while (!path.isEmpty() && !fileSystem->exists(path))
+    {
+        if (path.lastIndexOf('/') > 0)
+        {
+            path = path.substring(0, path.lastIndexOf('/'));
+        }
+        else
+        {
+            path = String(); // No slash => the top folder does not exist
+        }
+    }
+    Serial.println(String("Last existing parent: ") + path);
+    return path;
+}
+void FILAMENT_ESTIMATOR::handleFileCreate()
+{
+    if (!fsOK)
+    {
+        return replyServerError(FPSTR(FS_INIT_ERROR));
+    }
+
+    String path = server.arg("path");
+    if (path.isEmpty())
+    {
+        return replyBadRequest(F("PATH ARG MISSING"));
+    }
+
+    if (path == "/")
+    {
+        return replyBadRequest("BAD PATH");
+    }
+    if (fileSystem->exists(path))
+    {
+        return replyBadRequest(F("PATH FILE EXISTS"));
+    }
+
+    String src = server.arg("src");
+    if (src.isEmpty())
+    {
+        // No source specified: creation
+        Serial.println(String("handleFileCreate: ") + path);
+        if (path.endsWith("/"))
+        {
+            // Create a folder
+            path.remove(path.length() - 1);
+            if (!fileSystem->mkdir(path))
+            {
+                return replyServerError(F("MKDIR FAILED"));
+            }
+        }
+        else
+        {
+            // Create a file
+            File file = fileSystem->open(path, "w");
+            if (file)
+            {
+                file.write((const char *)0);
+                file.close();
+            }
+            else
+            {
+                return replyServerError(F("CREATE FAILED"));
+            }
+        }
+        if (path.lastIndexOf('/') > -1)
+        {
+            path = path.substring(0, path.lastIndexOf('/'));
+        }
+        replyOKWithMsg(path);
+    }
+    else
+    {
+        // Source specified: rename
+        if (src == "/")
+        {
+            return replyBadRequest("BAD SRC");
+        }
+        if (!fileSystem->exists(src))
+        {
+            return replyBadRequest(F("SRC FILE NOT FOUND"));
+        }
+
+        Serial.println(String("handleFileCreate: ") + path + " from " + src);
+
+        if (path.endsWith("/"))
+        {
+            path.remove(path.length() - 1);
+        }
+        if (src.endsWith("/"))
+        {
+            src.remove(src.length() - 1);
+        }
+        if (!fileSystem->rename(src, path))
+        {
+            return replyServerError(F("RENAME FAILED"));
+        }
+        replyOKWithMsg(lastExistingParent(src));
+    }
+}
+void FILAMENT_ESTIMATOR::deleteRecursive(String path)
+{
+    File file = fileSystem->open(path, "r");
+    bool isDir = file.isDirectory();
+    file.close();
+
+    // If it's a plain file, delete it
+    if (!isDir)
+    {
+        fileSystem->remove(path);
+        return;
+    }
+
+    // Otherwise delete its contents first
+    Dir dir = fileSystem->openDir(path);
+
+    while (dir.next())
+    {
+        deleteRecursive(path + '/' + dir.fileName());
+    }
+
+    // Then delete the folder itself
+    fileSystem->rmdir(path);
+}
+void FILAMENT_ESTIMATOR::handleFileDelete()
+{
+    if (!fsOK)
+    {
+        return replyServerError(FPSTR(FS_INIT_ERROR));
+    }
+
+    String path = server.arg(0);
+    if (path.isEmpty() || path == "/")
+    {
+        return replyBadRequest("BAD PATH");
+    }
+
+    Serial.println(String("handleFileDelete: ") + path);
+    if (!fileSystem->exists(path))
+    {
+        return replyNotFound(FPSTR(FILE_NOT_FOUND));
+    }
+    deleteRecursive(path);
+
+    replyOKWithMsg(lastExistingParent(path));
+}
+void FILAMENT_ESTIMATOR::handleFileUpload()
+{
+    if (!fsOK)
+    {
+        return replyServerError(FPSTR(FS_INIT_ERROR));
+    }
+    if (server.uri() != "/edit")
+    {
+        return;
+    }
+    HTTPUpload &upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START)
+    {
+        String filename = upload.filename;
+        // Make sure paths always start with "/"
+        if (!filename.startsWith("/"))
+        {
+            filename = "/" + filename;
+        }
+        Serial.println(String("handleFileUpload Name: ") + filename);
+        uploadFile = fileSystem->open(filename, "w");
+        if (!uploadFile)
+        {
+            return replyServerError(F("CREATE FAILED"));
+        }
+        Serial.println(String("Upload: START, filename: ") + filename);
+    }
+    else if (upload.status == UPLOAD_FILE_WRITE)
+    {
+        if (uploadFile)
+        {
+            size_t bytesWritten = uploadFile.write(upload.buf, upload.currentSize);
+            if (bytesWritten != upload.currentSize)
+            {
+                return replyServerError(F("WRITE FAILED"));
+            }
+        }
+        Serial.println(String("Upload: WRITE, Bytes: ") + upload.currentSize);
+    }
+    else if (upload.status == UPLOAD_FILE_END)
+    {
+        if (uploadFile)
+        {
+            uploadFile.close();
+        }
+        Serial.println(String("Upload: END, Size: ") + upload.totalSize);
+    }
+}
+void FILAMENT_ESTIMATOR::handleNotFound()
+{
+    if (!fsOK)
+    {
+        return replyServerError(FPSTR(FS_INIT_ERROR));
+    }
+
+    String uri = ESP8266WebServer::urlDecode(server.uri()); // required to read paths with blanks
+
+    if (handleFileRead(uri))
+    {
+        return;
+    }
+
+    // Dump debug data
+    String message;
+    message.reserve(100);
+    message = F("Error: File not found\n\nURI: ");
+    message += uri;
+    message += F("\nMethod: ");
+    message += (server.method() == HTTP_GET) ? "GET" : "POST";
+    message += F("\nArguments: ");
+    message += server.args();
+    message += '\n';
+    for (uint8_t i = 0; i < server.args(); i++)
+    {
+        message += F(" NAME:");
+        message += server.argName(i);
+        message += F("\n VALUE:");
+        message += server.arg(i);
+        message += '\n';
+    }
+    message += "path=";
+    message += server.arg("path");
+    message += '\n';
+    Serial.print(message);
+
+    return replyNotFound(message);
+}
+void FILAMENT_ESTIMATOR::handleGetEdit()
+{
+    if (handleFileRead(F("/edit/index.htm")))
+    {
+        return;
+    }
+    replyNotFound(FPSTR(FILE_NOT_FOUND));
+}
+void FILAMENT_ESTIMATOR::startLogging()
+{
+    Serial.println(F("Start logging."));
+    String filename = "/log/log";
+    uint8_t suf = 1;
+    filename += suf;
+    filename += ".txt";
+
+    while (LittleFS.exists(filename))
+    {
+        filename = "/log/log";
+        suf += 1;
+        filename += suf;
+        filename += ".txt";
+        yield();
+    }
+    Serial.print(F("Logging into file: "));
+    Serial.println(filename);
+    logFile = LittleFS.open(filename, "a");
+    isLogging = true;
+}
+void FILAMENT_ESTIMATOR::stopLogging()
+{
+    Serial.println(F("Stop logging."));
+    logFile.close();
+    isLogging = false;
+}
+void FILAMENT_ESTIMATOR::updateLogging()
+{
+    //logs every second
+    now = time(nullptr);
+    if (now != previous)
+    {
+        String record = (String)now;
+        record += ",";
+        record += (String)totalWeight;
+        if (logFile.println(record))
+        {
+            Serial.print("Logging: ");
+            Serial.println(record);
+        }
+        previous = now;
+    }
 }

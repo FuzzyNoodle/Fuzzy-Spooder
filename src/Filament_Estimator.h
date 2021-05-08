@@ -9,11 +9,9 @@
 #ifndef FILAMENT_ESTIMATOR_H
 #define FILAMENT_ESTIMATOR_H
 
-//#define ENABLE_BLYNK
-
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
-#define CURRENT_VERSION_MINOR 3
+#define CURRENT_VERSION_MINOR 4
 #define CURRENT_VERSION_PATCH 0
 
 #include "Arduino.h"
@@ -42,11 +40,9 @@
 #include <ArduinoJson.h>
 #include "FS.h"
 #include <LittleFS.h>
+#include <WiFiClient.h>
 
-//NTP
-#include <NTPClient.h>
-#include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
+//Blynk
 
 #define JSON_DOC_BUFFER_SIZE 1024
 #define SPOOL_HOLDER_MAX_SLOT_SIZE 32
@@ -121,7 +117,10 @@
 #define DEBUG_LOAD_CONFIG 6
 #define DEBUG_DUMP_CONFIG 7
 #define DEBUG_REBOOT 8
-#define DEBUG_RETURN 9
+#define DEBUG_BLYNK_NOTIFY 9
+#define DEBUG_START_LOGGING 10
+#define DEBUG_STOP_LOGGING 11
+#define DEBUG_RETURN 12
 
 #define DECLARED_EEPROM_SIZE 1024
 #define EEPROM_START_ADDRESS 0
@@ -181,6 +180,16 @@ public:
   uint16_t getLongClickTime();
   //Time settings for button
   uint16_t getDoubleClickTime();
+
+  //made public due to using callback function in class, requires an outside-class function
+  void handleStatus();     //Return the FS type, status and size info
+  void handleFileList();   //Return the list of files in the directory specified by the "dir" query string parameter. Also demonstrates the use of chuncked responses.
+  void handleGetEdit();    //This specific handler returns the index.htm from the /edit folder.
+  void handleFileCreate(); //Handle the creation/rename of a new file
+  void handleFileDelete(); //Handle a file deletion request
+  void handleFileUpload(); //Handle a file upload request
+  void handleNotFound();   //The "Not Found" handler
+  void replyOK();
 
 private:
   ESP8266WebServer server;
@@ -253,11 +262,15 @@ private:
   //The period to refresh homepage (weight)
   const uint32_t UPDATE_HOMEPAGE_PERIOD = 200;
   void updateHomepage();
-  void drawOverlay();
-  bool drawTareMessage = false;
-  uint32_t drawTareMessageTimer;
-  const uint32_t DRAW_TARE_MESSAGE_PERIOD = 1000;
-  void checkTareTimer();
+  //Display overlay msg for [period ms]. If line2="", line1 is displayed at center.
+  void drawOverlay(const char *msgLine1, const char *msgLine2, uint16_t period);
+  void updateOverlay();
+  const char *overlayMsgLine1;
+  const char *overlayMsgLine2;
+  uint16_t overlayDisplayPeriod = 1000;
+  bool drawOverlayFlag = false;
+  uint32_t drawOverlayTimer;
+  void drawDisplay();
 
   uint8_t displayType = DISPLAY_TYPE_FILAMENT;
   float filamentWeight;
@@ -280,8 +293,8 @@ private:
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-  uint8_t numberOfDebugMenuItems = 10;
-  String debugMenuTitle[10] = {
+  uint8_t numberOfDebugMenuItems = 13;
+  String debugMenuTitle[13] = {
       "Load To Setting",
       "Save To EEPROM",
       "Dump Setting",
@@ -291,6 +304,9 @@ private:
       "Load Config",
       "Dump Config",
       "Reboot",
+      "Send Blynk Test Message",
+      "Start Logging",
+      "Stop Logging",
       "Return to Menu"};
   void loadToSetting();
   void saveToEEPROM();
@@ -328,6 +344,7 @@ private:
   const char *wifi_ssid;      // "your_ssid"
   const char *wifi_password;  // "your_password"
   const char *blynk_auth;
+
   const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
   uint16_t spoolHolderSlotWeight[SPOOL_HOLDER_MAX_SLOT_SIZE];
   uint8_t spoolHolderSlotSize = 0;
@@ -338,7 +355,7 @@ private:
   uint8_t spooderIDNumber = 0;
   bool setSpooderIDEditMode = false;
   bool displaySpooderIDDigit = true;
-  bool validSpooderIDInEEPROM = false;
+  bool validSpooderID = false;
   uint32_t setSpooderIDTimer;
   void checkSetSpooderIDEditModeTimer();
   const uint32_t SET_SPOODER_ID_EDIT_MODE_PERIOD = 500;
@@ -356,7 +373,43 @@ private:
   uint32_t checkConnectionDisplaySymbolTimer;
   void checkConnectionDisplaySymbol();
 
-  
+  void beginBlynk();
+  bool blynkConnected = false;
+
+  //file system manager, imported from https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser
+  const char *fsName = "LittleFS";
+  FS *fileSystem = &LittleFS;
+  LittleFSConfig fileSystemConfig = LittleFSConfig();
+  bool fsOK;
+  String unsupportedFiles = String();
+  File uploadFile;
+  const char *TEXT_PLAIN = "text/plain";
+  const char *FS_INIT_ERROR = "FS INIT ERROR";
+  const char *FILE_NOT_FOUND = "FileNotFound";
+  // Utils to return HTTP codes, and determine content-type
+  void replyOKWithMsg(String msg);
+  void replyNotFound(String msg);
+  void replyBadRequest(String msg);
+  void replyServerError(String msg);
+  // Request handlers
+  bool handleFileRead(String path);       //Read the given file from the filesystem and stream it back to the client
+  String lastExistingParent(String path); //As some FS (e.g. LittleFS) delete the parent folder when the last child has been removed, return the path of the closest parent still existing
+  void deleteRecursive(String path);      //Delete the file or folder designed by the given path. If it's a file, delete it. If it's a folder, delete all nested contents first then the folder itself
+
+  // Data logging
+  // 10 min = 18 kB
+  // 1 hr = 108 kB
+  // 7 hr = 756 k
+  uint32_t loggerTimer;
+  uint32_t loggerInterval = 1000;
+  uint16_t loggerCounter = 0;
+  bool isLogging = false;
+  File logFile;
+  void startLogging();
+  void stopLogging();
+  void updateLogging();
+  time_t now;
+  time_t previous;
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
