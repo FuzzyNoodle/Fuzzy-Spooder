@@ -159,7 +159,11 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
 ### Using the Wifi_Stndalone Example
-User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file system works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
+Add this line in your sketch setup:
+
+ ```spooder.setWifi(true);``` 
+
+ to enable the wifi function. User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file system works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
 
 #### Spooder ID and mDNS
 
