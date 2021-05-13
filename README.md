@@ -7,6 +7,7 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
 - Firmware version: 0.4.0
 - Config version: 0.3.0
 
+
 ---
 ## Getting Started
 
