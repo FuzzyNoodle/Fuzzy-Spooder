@@ -218,12 +218,4 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 - Maximum allowed body length is 120 symbols;
 - Every device can send only 1 notification every 5 seconds;
 
-#### Printing Status
 
-Printing status based on weight change pattern is defined as follow:
-
-- STATUS_EMPTY
-  - filamnetWeight < emptyThreshold
-  
-- STATUS_IDLE
-- STATUS_PRINTING
