@@ -136,6 +136,18 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         setting.calValue = DEFAULT_CALIBRATION_VALUE;
         isDirty = true;
     }
+    Serial.print(F("Low filament threshold = "));
+    Serial.println(setting.lowFilamentThreshold);
+    if (setting.lowFilamentThreshold > 9999)
+    {
+        Serial.println(F("Low filament threshold invalid, using default value."));
+        setting.lowFilamentThreshold = DEFAULT_LOW_FILAMENT_THRESHOLD_VALUE;
+        isDirty = true;
+    }
+    lowFilament4Digit = (setting.lowFilamentThreshold / 1000U) % 10;
+    lowFilament3Digit = (setting.lowFilamentThreshold / 100U) % 10;
+    lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
+    lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
     if (isDirty == true)
     {
@@ -176,12 +188,17 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     //load config file
     loadConfig();
 
+    Serial.print("Initializing Loadcell using ");
+    Serial.println(setting.calValue);
+
     loadcell.begin();
-    loadcell.start(stabilizingTime, false);
+    loadcell.start(stabilizingTime, true);
     loadcell.setCalFactor(setting.calValue);
     tare();
     Serial.println("Setup completed.");
 
+    printingStatus = STATUS_BOOT;
+    printingStatusString = "STATUS_BOOT";
     setPage(PAGE_HOME);
 }
 void FILAMENT_ESTIMATOR::update(void)
@@ -200,7 +217,15 @@ void FILAMENT_ESTIMATOR::update(void)
     }
     if (newDataReady == true)
     {
+
         totalWeight = loadcell.getData();
+
+        //used for development purpose
+        if (emulationStarted == true)
+        {
+            totalWeight = emulatedWeight;
+        }
+
         filamentWeight = totalWeight - setting.spoolHolderWeight;
     }
     updateHomepage();
@@ -227,12 +252,25 @@ void FILAMENT_ESTIMATOR::update(void)
     {
         checkSetSpooderIDEditModeTimer();
     }
+    if (lowFilamentEditDigitMode == true)
+    {
+        checkLowFilamentEditModeTimer();
+    }
+
     checkConnectionStatus();
     checkConnectionDisplaySymbol();
+
     if (isLogging == true)
     {
-        updateLogging();
+        //updateLogging();
+        //function moved inside updateDetection()
     }
+
+    if (emulationStarted == true)
+    {
+        updateEmulation();
+    }
+    updateDetection();
 }
 void FILAMENT_ESTIMATOR::setWifi(bool wifi)
 {
@@ -286,6 +324,8 @@ void FILAMENT_ESTIMATOR::connectWifi()
      network-issues with your other WiFi-devices on your WiFi-network. */
     WiFi.mode(WIFI_STA);
     WiFi.begin(wifi_ssid, wifi_password);
+    Serial.print(F("Connecting to "));
+    Serial.println(wifi_ssid);
 }
 void FILAMENT_ESTIMATOR::beginServices()
 {
@@ -322,30 +362,31 @@ void FILAMENT_ESTIMATOR::beginServices()
     server.begin();
 
     //Setup for OTA
-    ArduinoOTA.onStart([]() {
-        Serial.println("Start");
-    });
-    ArduinoOTA.onEnd([]() {
-        Serial.println("\nEnd");
-    });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    });
-    ArduinoOTA.onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR)
-            Serial.println("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR)
-            Serial.println("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR)
-            Serial.println("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR)
-            Serial.println("Receive Failed");
-        else if (error == OTA_END_ERROR)
-            Serial.println("End Failed");
-    });
+    ArduinoOTA.onStart([]()
+                       { Serial.println("Start"); });
+    ArduinoOTA.onEnd([]()
+                     { Serial.println("\nEnd"); });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+    ArduinoOTA.onError([](ota_error_t error)
+                       {
+                           Serial.printf("Error[%u]: ", error);
+                           if (error == OTA_AUTH_ERROR)
+                               Serial.println("Auth Failed");
+                           else if (error == OTA_BEGIN_ERROR)
+                               Serial.println("Begin Failed");
+                           else if (error == OTA_CONNECT_ERROR)
+                               Serial.println("Connect Failed");
+                           else if (error == OTA_RECEIVE_ERROR)
+                               Serial.println("Receive Failed");
+                           else if (error == OTA_END_ERROR)
+                               Serial.println("End Failed");
+                       });
     ArduinoOTA.begin();
     Serial.println("ArduinoOTA setup ok.");
+
+    configTime(MYTZ, "pool.ntp.org");
+    Serial.println("NTP started.");
 
     Serial.println(F("Services started."));
 }
@@ -478,6 +519,9 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case MENU_SET_SPOODER_ID:
                 setPage(PAGE_SET_SPOODER_ID);
+                break;
+            case MENU_LOW_FILAMENT_WEIGHT:
+                setPage(PAGE_LOW_FILAMENT_SETUP);
                 break;
             case MENU_DEBUG:
                 setPage(PAGE_DEBUG);
@@ -680,7 +724,48 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             setPage(PAGE_MENU);
             break;
-
+        case PAGE_LOW_FILAMENT_SETUP:
+            switch (lowFilamentSelection)
+            {
+            case LOW_FILAMENT_4_DIGIT:
+            case LOW_FILAMENT_3_DIGIT:
+            case LOW_FILAMENT_2_DIGIT:
+            case LOW_FILAMENT_1_DIGIT:
+                if (lowFilamentEditDigitMode == false)
+                {
+                    lowFilamentEditDigitMode = true;
+                    displayLowFilamentDigit = false;
+                    displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    lowFilamentEditModerTimer = millis();
+                }
+                else
+                {
+                    lowFilamentEditDigitMode = false;
+                    displayLowFilamentDigit = true;
+                    displayPage(PAGE_LOW_FILAMENT_SETUP);
+                }
+                break;
+            case CALIBRATE_OK:
+                lowFilamentEditDigitMode = false;
+                //Reset the selection to the second digit, for next entry
+                lowFilamentSelection = LOW_FILAMENT_2_DIGIT;
+                setting.lowFilamentThreshold = getLowFilamentThreshold();
+                saveToEEPROM();
+                setPage(PAGE_MENU);
+                break;
+            case CALIBRATE_CANCEL:
+                lowFilamentEditDigitMode = false;
+                //Reset the selection to the second digit, for next entry
+                lowFilamentSelection = LOW_FILAMENT_2_DIGIT;
+                //Revert to original value
+                lowFilament4Digit = (setting.lowFilamentThreshold / 1000U) % 10;
+                lowFilament3Digit = (setting.lowFilamentThreshold / 100U) % 10;
+                lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
+                lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
+                setPage(PAGE_MENU);
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             switch (debugMenuSelection)
             {
@@ -713,9 +798,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 ESP.restart();
                 break;
             case DEBUG_BLYNK_NOTIFY:
-                Blynk.notify(hostname + " test notification message");
-                drawOverlay("Blynk msg", "Sent", 1000);
-                Serial.println(F("Blynk notification message sent."));
+                notify(NOTIFICATION_TEST_MESSAGE);
                 break;
             case DEBUG_START_LOGGING:
                 startLogging();
@@ -724,6 +807,26 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case DEBUG_STOP_LOGGING:
                 stopLogging();
                 drawOverlay("Stop", "Logging", 1000);
+                break;
+            case DEBUG_RUN_LOG_TXT:
+                startEmulation();
+
+                break;
+            case DEBUG_STOP_LOG_TXT:
+                stopEmulation();
+
+                break;
+            case DEBUG_TOGGLE_DETECTION_OUTPUT:
+                detectionDebugOutput = !detectionDebugOutput;
+                Serial.print(F("Detection output "));
+                if (detectionDebugOutput == true)
+                {
+                    Serial.println(F("on."));
+                }
+                else
+                {
+                    Serial.println(F("off."));
+                }
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -747,9 +850,6 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
         }
         break;
     }
-
-    //Serial.print(btn.getNumberOfClicks());
-    //Blynk.notify("Hello from ESP8266! Button Pressed!");
 }
 void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 {
@@ -934,6 +1034,60 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 {
                     setSpooderIDSelection = setSpooderIDSelection - 1;
                     setPage(PAGE_SET_SPOODER_ID);
+                }
+                break;
+            }
+            break;
+        case PAGE_LOW_FILAMENT_SETUP:
+            switch (lowFilamentEditDigitMode)
+            {
+            case true:
+                switch (lowFilamentSelection)
+                {
+                case LOW_FILAMENT_4_DIGIT:
+                    if (lowFilament4Digit > 0)
+                    {
+                        lowFilament4Digit--;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+
+                    break;
+                case LOW_FILAMENT_3_DIGIT:
+                    if (lowFilament3Digit > 0)
+                    {
+                        lowFilament3Digit--;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                case LOW_FILAMENT_2_DIGIT:
+                    if (lowFilament2Digit > 0)
+                    {
+                        lowFilament2Digit--;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                case LOW_FILAMENT_1_DIGIT:
+                    if (lowFilament1Digit > 0)
+                    {
+                        lowFilament1Digit--;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (lowFilamentSelection > LOW_FILAMENT_4_DIGIT)
+                {
+                    lowFilamentSelection = lowFilamentSelection - 1;
+                    setPage(PAGE_LOW_FILAMENT_SETUP);
                 }
                 break;
             }
@@ -1142,6 +1296,60 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        case PAGE_LOW_FILAMENT_SETUP:
+            switch (lowFilamentEditDigitMode)
+            {
+            case true:
+                switch (lowFilamentSelection)
+                {
+                case LOW_FILAMENT_4_DIGIT:
+                    if (lowFilament4Digit < 9)
+                    {
+                        lowFilament4Digit++;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+
+                    break;
+                case LOW_FILAMENT_3_DIGIT:
+                    if (lowFilament3Digit < 9)
+                    {
+                        lowFilament3Digit++;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                case LOW_FILAMENT_2_DIGIT:
+                    if (lowFilament2Digit < 9)
+                    {
+                        lowFilament2Digit++;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                case LOW_FILAMENT_1_DIGIT:
+                    if (lowFilament1Digit < 9)
+                    {
+                        lowFilament1Digit++;
+                        displayLowFilamentDigit = true;
+                        lowFilamentEditModerTimer = millis();
+                        displayPage(PAGE_LOW_FILAMENT_SETUP);
+                    }
+                    break;
+                }
+                break;
+            case false:
+                if (lowFilamentSelection < LOW_FILAMENT_CANCEL)
+                {
+                    lowFilamentSelection = lowFilamentSelection + 1;
+                    setPage(PAGE_LOW_FILAMENT_SETUP);
+                }
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             if (debugMenuSelection < (numberOfDebugMenuItems - 1))
             {
@@ -1173,11 +1381,11 @@ bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 {
 
-    if (page != PAGE_HOME)
-    {
-        Serial.print(F("Display page: "));
-        Serial.println(page);
-    }
+    //if (page != PAGE_HOME)
+    //{
+    //Serial.print(F("Display page: "));
+    //Serial.println(page);
+    //}
 
     switch (page)
     {
@@ -1193,12 +1401,12 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawRightIndicator(0);
         //Draw display type symbol and weight
-        display.setFont(ArialMT_Plain_24);
-        display.setTextAlignment(TEXT_ALIGN_RIGHT);
+
         switch (displayType)
         {
         case DISPLAY_TYPE_TOTAL:
             display.setFont(ArialMT_Plain_24);
+            display.setTextAlignment(TEXT_ALIGN_RIGHT);
             display.setColor(WHITE);
             display.fillRect(6, 22, 4, 26);
             display.fillRect(27, 22, 4, 26);
@@ -1212,6 +1420,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.setPixel(13, 43);
             display.setPixel(18, 43);
             display.setPixel(23, 58);
+
             if (abs(totalWeight) < 9999)
             {
                 int16_t displayWeight = totalWeight;
@@ -1224,7 +1433,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         case DISPLAY_TYPE_FILAMENT:
             display.setFont(ArialMT_Plain_24);
-
+            display.setTextAlignment(TEXT_ALIGN_RIGHT);
             display.setColor(WHITE);
             display.fillRect(12, 26, 3, 17);
             display.fillRect(17, 26, 3, 17);
@@ -1235,8 +1444,15 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.setPixel(13, 43);
             display.setPixel(18, 43);
             display.setPixel(23, 58);
-            if (filamentWeight > emptyThreshold)
+            switch (printingStatus)
             {
+            case STATUS_BOOT:
+                display.drawString(112, 20, "Booting");
+                break;
+            case STATUS_EMPTY:
+                display.drawString(104, 20, "Empty");
+                break;
+            case STATUS_IDLE:
                 if (abs(filamentWeight) < 9999)
                 {
                     display.drawString(90, 20, String(filamentWeight, 0));
@@ -1244,16 +1460,24 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
                     display.setFont(ArialMT_Plain_10);
                     display.drawString(100, 32, "g");
                 }
-            }
-            else //shows empty on the homescreen
-            {
-                display.drawString(104, 20, "Empty");
-            }
+                break;
+            case STATUS_PRINTING:
+                if (abs(filamentWeight) < 9999)
+                {
+                    display.drawString(90, 20, String(filamentWeight, 0));
+                    //Draw unit
+                    display.setFont(ArialMT_Plain_10);
+                    display.drawString(100, 32, "g");
+                }
+                break;
+            default:
+                break;
+            } //switch (printingStatus)
 
             break;
         case DISPLAY_TYPE_SPOOL_HOLDER:
             display.setFont(ArialMT_Plain_24);
-
+            display.setTextAlignment(TEXT_ALIGN_RIGHT);
             display.setColor(WHITE);
             display.fillRect(6, 22, 4, 26);
             display.fillRect(27, 22, 4, 26);
@@ -1383,8 +1607,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         case CALIBRATE_1_DIGIT:
             display.drawString(12, 36, String(calibrate4Digit));
-            display.drawString(52, 36, String(calibrate2Digit));
             display.drawString(32, 36, String(calibrate3Digit));
+            display.drawString(52, 36, String(calibrate2Digit));
             if (displayCalibrateDigit == true)
             {
                 display.drawString(72, 36, String(calibrate1Digit));
@@ -1393,15 +1617,15 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         case CALIBRATE_OK:
             display.drawString(12, 36, String(calibrate4Digit));
-            display.drawString(52, 36, String(calibrate2Digit));
             display.drawString(32, 36, String(calibrate3Digit));
+            display.drawString(52, 36, String(calibrate2Digit));
             display.drawString(72, 36, String(calibrate1Digit));
             drawTriangle(90, 42);
             break;
         case CALIBRATE_CANCEL:
             display.drawString(12, 36, String(calibrate4Digit));
-            display.drawString(52, 36, String(calibrate2Digit));
             display.drawString(32, 36, String(calibrate3Digit));
+            display.drawString(52, 36, String(calibrate2Digit));
             display.drawString(72, 36, String(calibrate1Digit));
             drawTriangle(90, 52);
             break;
@@ -1633,6 +1857,79 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawDisplay();
     }
     break;
+    case PAGE_LOW_FILAMENT_SETUP:
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Low Filament Setup");
+        display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(6, 12, "Set filament threshold weight");
+        display.drawString(6, 22, "for notification:");
+
+        display.setFont(ArialMT_Plain_16);
+        switch (lowFilamentSelection)
+        {
+        case LOW_FILAMENT_4_DIGIT:
+            if (displayLowFilamentDigit == true)
+            {
+                display.drawString(12, 36, String(lowFilament4Digit));
+            }
+            display.drawString(32, 36, String(lowFilament3Digit));
+            display.drawString(52, 36, String(lowFilament2Digit));
+            display.drawString(72, 36, String(lowFilament1Digit));
+            drawTriangle(6, 45);
+            break;
+        case LOW_FILAMENT_3_DIGIT:
+            display.drawString(12, 36, String(lowFilament4Digit));
+            if (displayLowFilamentDigit == true)
+            {
+                display.drawString(32, 36, String(lowFilament3Digit));
+            }
+            display.drawString(52, 36, String(lowFilament2Digit));
+            display.drawString(72, 36, String(lowFilament1Digit));
+            drawTriangle(26, 45);
+            break;
+        case LOW_FILAMENT_2_DIGIT:
+            display.drawString(12, 36, String(lowFilament4Digit));
+            display.drawString(32, 36, String(lowFilament3Digit));
+            if (displayLowFilamentDigit == true)
+            {
+                display.drawString(52, 36, String(lowFilament2Digit));
+            }
+            display.drawString(72, 36, String(lowFilament1Digit));
+            drawTriangle(46, 45);
+            break;
+        case LOW_FILAMENT_1_DIGIT:
+            display.drawString(12, 36, String(lowFilament4Digit));
+            display.drawString(32, 36, String(lowFilament3Digit));
+            display.drawString(52, 36, String(lowFilament2Digit));
+            if (displayLowFilamentDigit == true)
+            {
+                display.drawString(72, 36, String(lowFilament1Digit));
+            }
+            drawTriangle(66, 45);
+            break;
+        case LOW_FILAMENT_OK:
+            display.drawString(12, 36, String(lowFilament4Digit));
+            display.drawString(32, 36, String(lowFilament3Digit));
+            display.drawString(52, 36, String(lowFilament2Digit));
+            display.drawString(72, 36, String(lowFilament1Digit));
+            drawTriangle(90, 42);
+            break;
+        case LOW_FILAMENT_CANCEL:
+            display.drawString(12, 36, String(lowFilament4Digit));
+            display.drawString(32, 36, String(lowFilament3Digit));
+            display.drawString(52, 36, String(lowFilament2Digit));
+            display.drawString(72, 36, String(lowFilament1Digit));
+            drawTriangle(90, 52);
+            break;
+        }
+        display.setFont(ArialMT_Plain_10);
+        display.drawString(96, 36, "Ok");
+        display.drawString(96, 46, "Cancel");
+        drawDisplay();
+        break;
     case PAGE_DEBUG:
         display.clear();
         display.setFont(ArialMT_Plain_10);
@@ -1797,6 +2094,8 @@ void FILAMENT_ESTIMATOR::calibrate()
     //refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
     calibrationWeight = getCalibrationWeight();
+    Serial.print("Calibration weight = ");
+    Serial.println(calibrationWeight);
     //get the new calibration value
     newCalibrationValue = loadcell.getNewCalibration(calibrationWeight);
     Serial.print("New calibration value = ");
@@ -1878,6 +2177,15 @@ void FILAMENT_ESTIMATOR::checkSetSpooderIDEditModeTimer()
         displayPage(PAGE_SET_SPOODER_ID);
     }
 }
+void FILAMENT_ESTIMATOR::checkLowFilamentEditModeTimer()
+{
+    if (millis() - lowFilamentEditModerTimer > LOW_FILAMENT_EDIT_MODE_PERIOD)
+    {
+        displayLowFilamentDigit = !displayLowFilamentDigit;
+        lowFilamentEditModerTimer = millis();
+        displayPage(PAGE_LOW_FILAMENT_SETUP);
+    }
+}
 void FILAMENT_ESTIMATOR::setCalibrationWeight(uint16_t weight)
 {
     if (weight > 9999)
@@ -1917,6 +2225,11 @@ void FILAMENT_ESTIMATOR::setCurrentSpoolHolderWeight(uint16_t weight)
 uint16_t FILAMENT_ESTIMATOR::getSpoolHolderWeight()
 {
     uint16_t weight = spoolHolder3Digit * 100 + spoolHolder2Digit * 10 + spoolHolder1Digit;
+    return weight;
+}
+uint16_t FILAMENT_ESTIMATOR::getLowFilamentThreshold()
+{
+    uint16_t weight = lowFilament4Digit * 1000 + lowFilament3Digit * 100 + lowFilament2Digit * 10 + lowFilament1Digit;
     return weight;
 }
 void FILAMENT_ESTIMATOR::setStepsPerClick(uint8_t steps)
@@ -2748,5 +3061,446 @@ void FILAMENT_ESTIMATOR::updateLogging()
             Serial.println(record);
         }
         previous = now;
+    }
+}
+void FILAMENT_ESTIMATOR::startEmulation()
+{
+    emulatedLogFile = LittleFS.open("log/log.txt", "r");
+    Serial.print("log/log.txt");
+    if (!emulatedLogFile)
+    {
+        Serial.println(F(" - File open failed."));
+        emulatedLogFile.close();
+        return;
+    }
+    drawOverlay("Start", "Emulation", 1000);
+    Serial.println(F(" - File open succeeded."));
+    Serial.print(F("File size: "));
+    Serial.print(emulatedLogFile.size());
+    Serial.println(F(" Bytes."));
+
+    emulationStarted = true;
+    Serial.println(F("Emulation started."));
+    EMULATION_PERIOD = 100;
+    DETECTION_PERIOD = 100;
+    loggerCounter = 0;
+    detectionTimer = millis(); //reset timer, to fill the weight first, debug purpose
+}
+void FILAMENT_ESTIMATOR::stopEmulation()
+{
+    if (emulatedLogFile == true)
+    {
+        drawOverlay("Stop", "Emulation", 1000);
+        Serial.println(F("Emulation stopped."));
+        emulatedLogFile.close();
+        emulationStarted = false;
+        EMULATION_PERIOD = 1000;
+        DETECTION_PERIOD = 1000;
+    }
+}
+void FILAMENT_ESTIMATOR::updateEmulation()
+{
+    if (millis() - emulationTimer < EMULATION_PERIOD)
+        return;
+    if (emulatedLogFile.available() > 5) //normally a valid data set has more than 4 bytes
+    {
+        //Reading a set of data
+        emulatedLogFile.parseInt();
+        emulatedLogFile.read();
+        emulatedWeight = emulatedLogFile.parseFloat();
+    }
+    else
+    {
+        stopEmulation();
+    }
+
+    emulationTimer = millis();
+}
+void FILAMENT_ESTIMATOR::updateDetection()
+{
+    if (millis() - detectionTimer < DETECTION_PERIOD)
+        return;
+
+    float change = totalWeight - previousTotalWeight;
+    float mean = getMean(weightCount);
+    float mean3 = getMean(3);
+    float stddev = getStddev(weightCount);
+    float stddev3 = getStddev(3);
+
+    pushWeight(totalWeight);
+    pushStddev(stddev3);
+    uint8_t stddev3Count = getStddevCount(1.0);
+
+    time_t now = time(nullptr);
+    tm *tmp = localtime(&now);
+    String timeStamp;
+    if (tmp->tm_hour < 10)
+        timeStamp += "0";
+    timeStamp += tmp->tm_hour;
+    timeStamp += ":";
+    if (tmp->tm_min < 10)
+        timeStamp += "0";
+    timeStamp += tmp->tm_min;
+    timeStamp += ":";
+    if (tmp->tm_sec < 10)
+        timeStamp += "0";
+    timeStamp += tmp->tm_sec;
+
+    if (detectionDebugOutput == true)
+    {
+        Serial.print(timeStamp);
+        Serial.print(" Count = ");
+        Serial.print(weightCount);
+        Serial.print(" Total = ");
+        if (totalWeight >= 0)
+            Serial.print(F(" "));
+        Serial.print(totalWeight);
+        Serial.print("  Change = ");
+        if (change >= 0)
+            Serial.print(F(" "));
+        Serial.print(change);
+        Serial.print("  Mean = ");
+        if (mean >= 0)
+            Serial.print(F(" "));
+        Serial.print(mean);
+        Serial.print("  Mean(3) = ");
+        if (mean3 >= 0)
+            Serial.print(F(" "));
+        Serial.print(mean3);
+        Serial.print("  Stddev = ");
+        if (stddev >= 0)
+            Serial.print(F(" "));
+        Serial.print(stddev);
+        Serial.print("  Stddev(3) = ");
+        if (stddev3 >= 0)
+            Serial.print(F(" "));
+        Serial.print(stddev3);
+
+        Serial.print("  stddev3Count = ");
+        if (stddev3Count < 10)
+            Serial.print(F(" "));
+        Serial.print(stddev3Count);
+
+        Serial.print("  printingStatus = ");
+        Serial.print(printingStatusString);
+        Serial.println();
+    }
+
+    if (isLogging == true)
+    {
+        //logs every second
+
+        String record;
+        record += (String)timeStamp;
+        record += ",";
+        record += (String)loggerCounter;
+        record += ",";
+        record += (String)totalWeight;
+        record += ",";
+        record += (String)change;
+        record += ",";
+        record += (String)stddev;
+        record += ",";
+        record += (String)stddev3;
+        record += ",";
+        record += (String)stddev3Count;
+        record += ",";
+        record += (String)printingStatusString;
+        if (logFile.println(record))
+        {
+            //Serial.print("Logging: ");
+            //Serial.println(record);
+        }
+        loggerCounter++;
+    }
+
+    //calculate how many samples has the stddev3>1 condition, in the last 30 seconds
+
+    switch (printingStatus)
+    {
+    case STATUS_BOOT:
+        if (weightCount > 2 && getMean(3) < 30 && getStddev(3) < 0.5)
+        {
+            printingStatus = STATUS_EMPTY;
+            printingStatusString = "STATUS_EMPTY";
+            Serial.println(F("Status changed from STATUS_BOOT to STATUS_EMPTY."));
+            purgeCounter = 3; //purge array
+            if (isLogging == true)
+            {
+                String record;
+                record += (String)loggerCounter;
+                record += ",";
+                record += "Status changed from STATUS_BOOT to STATUS_EMPTY.";
+                logFile.println(record);
+            }
+        }
+        break;
+    case STATUS_EMPTY:
+        if (getMean(3) >= (setting.spoolHolderWeight - 50) && getStddev(3) < 0.5)
+        {
+            if (purgeCounter == 0)
+            {
+                //Do not change state during purge counting
+                printingStatus = STATUS_IDLE;
+                printingStatusString = "STATUS_IDLE";
+                Serial.println(F("Status changed from STATUS_EMPTY to STATUS_IDLE."));
+                purgeCounter = 3; //purge array after few samples
+                if (isLogging == true)
+                {
+                    String record;
+                    record += (String)loggerCounter;
+                    record += ",";
+                    record += "Status changed from STATUS_EMPTY to STATUS_IDLE.";
+                    logFile.println(record);
+                }
+            }
+        }
+        break;
+    case STATUS_IDLE:
+        if (getMean(3) < (setting.spoolHolderWeight - 50) && getStddev(3) < 0.5)
+        {
+            if (purgeCounter == 0)
+            {
+                //Do not change state during purge counting
+                printingStatus = STATUS_EMPTY;
+                printingStatusString = "STATUS_EMPTY";
+                Serial.println(F("Status changed from STATUS_IDLE to STATUS_EMPTY."));
+                purgeCounter = 3; //purge array after few samples
+                if (isLogging == true)
+                {
+                    String record;
+                    record += (String)loggerCounter;
+                    record += ",";
+                    record += "Status changed from STATUS_IDLE to STATUS_EMPTY.";
+                    logFile.println(record);
+                }
+            }
+        }
+        else if (getStddev(30) >= 1 && getStddev(30) < 30 && stddev3Count >= 10)
+        {
+            //From STATUS_IDLE to STATUS_PRINTING
+            //(1) 30 sec stddev between 1 and 30
+            //(2) 10 of the last 30 stddev(3) samples is more than 1.0
+
+            printingStatus = STATUS_PRINTING;
+            printingStatusString = "STATUS_PRINTING";
+            Serial.println(F("Status changed from STATUS_IDLE to STATUS_PRINTING."));
+            notify(NOTIFICATION_PRINT_STARTED);
+            if (isLogging == true)
+            {
+                String record;
+                record += (String)loggerCounter;
+                record += ",";
+                record += "Status changed from STATUS_IDLE to STATUS_PRINTING.";
+                record += ",";
+                record += "NOTIFICATION_PRINT_STARTED sent";
+                logFile.println(record);
+            }
+        }
+
+        break;
+    case STATUS_PRINTING:
+        if (getStddev(30) < 1)
+        {
+            printingStatus = STATUS_IDLE;
+            printingStatusString = "STATUS_IDLE";
+            Serial.println(F("Status changed from STATUS_PRINTING to STATUS_IDLE."));
+            notify(NOTIFICATION_PRINT_COMPLETED);
+            lowFilamentNotificationSent = false; //reset low filament notification flag
+            if (isLogging == true)
+            {
+                String record;
+                record += (String)loggerCounter;
+                record += ",";
+                record += "Status changed from STATUS_PRINTING to STATUS_IDLE.";
+                record += ",";
+                record += "NOTIFICATION_PRINT_COMPLETED sent";
+                logFile.println(record);
+            }
+        }
+        if(lowFilamentNotificationSent == false)
+        {
+            if(filamentWeight<setting.lowFilamentThreshold)
+            {
+                notify(NOTIFICATIONI_LOW_FILAMENT);
+                lowFilamentNotificationSent = true; //notification sent once per print
+            }
+        }
+        break;
+    default:
+        break;
+    } //switch (printingStatus)
+
+    if (purgeCounter > 0)
+    {
+        purgeCounter--;
+        if (purgeCounter == 0)
+        {
+            purgeWeight(totalWeight);
+            purgeStddev(0);
+        }
+    }
+
+    previousTotalWeight = totalWeight;
+    detectionTimer = millis();
+}
+void FILAMENT_ESTIMATOR::pushWeight(float entry)
+{
+    if (weightCount < DETECTION_SAMPLE_SIZE)
+    {
+        weightCount++;
+    }
+    weightArray[detectionPosition] = entry;
+    detectionPosition += 1;
+    if (detectionPosition == DETECTION_SAMPLE_SIZE)
+    {
+        detectionPosition = 0;
+    }
+}
+void FILAMENT_ESTIMATOR::pushStddev(float entry)
+{
+    if (stddevCount < DETECTION_SAMPLE_SIZE)
+    {
+        stddevCount++;
+    }
+    stddevArray[stddevPosition] = entry;
+    stddevPosition += 1;
+    if (stddevPosition == DETECTION_SAMPLE_SIZE)
+    {
+        stddevPosition = 0;
+    }
+}
+void FILAMENT_ESTIMATOR::purgeWeight(float value)
+{
+    //purge the whole detectionArray with single value
+    //used when there is a condition change
+    for (uint16_t i = 0; i < DETECTION_SAMPLE_SIZE; i++)
+    {
+        pushWeight(value);
+    }
+    Serial.println(F("Weight Array purged."));
+}
+void FILAMENT_ESTIMATOR::purgeStddev(float value)
+{
+    //purge the whole detectionArray with single value
+    //used when there is a condition change
+    for (uint16_t i = 0; i < DETECTION_SAMPLE_SIZE; i++)
+    {
+        pushStddev(value);
+    }
+    Serial.println(F("Stddev Array purged."));
+}
+float FILAMENT_ESTIMATOR::getSum(uint16_t samples)
+{
+    if (weightCount == 0 || samples == 0)
+    {
+        return 0;
+    }
+    else
+    {
+        if (samples > weightCount)
+        {
+            samples = weightCount;
+        }
+        if (samples > DETECTION_SAMPLE_SIZE)
+        {
+            samples = DETECTION_SAMPLE_SIZE;
+        }
+    }
+    float sum = 0;
+    int16_t getArrayPosition;
+    for (uint8_t i = 0; i < samples; i++)
+    {
+        getArrayPosition = detectionPosition - 1 - i;
+        if (getArrayPosition < 0)
+        {
+            getArrayPosition += DETECTION_SAMPLE_SIZE;
+        }
+        sum += weightArray[getArrayPosition];
+    }
+    return sum;
+}
+float FILAMENT_ESTIMATOR::getMean(uint16_t samples)
+{
+    if (weightCount == 0 || samples == 0)
+    {
+        return 0;
+    }
+    float sum = getSum(samples);
+    return sum / samples;
+}
+float FILAMENT_ESTIMATOR::getStddev(uint16_t samples)
+{
+    if (weightCount == 0 || samples == 0)
+    {
+        return 0;
+    }
+    else
+    {
+        if (samples > weightCount)
+        {
+            samples = weightCount;
+        }
+        if (samples > DETECTION_SAMPLE_SIZE)
+        {
+            samples = DETECTION_SAMPLE_SIZE;
+        }
+    }
+    float sum = 0;
+    float square;
+    float mu = getMean(samples);
+    float theta;
+    int16_t getArrayPosition;
+    for (uint16_t i = 0; i < samples; i++)
+    {
+        getArrayPosition = detectionPosition - 1 - i;
+        if (getArrayPosition < 0)
+        {
+            getArrayPosition += DETECTION_SAMPLE_SIZE;
+        }
+        theta = mu - weightArray[getArrayPosition];
+        square = theta * theta;
+        sum += square;
+    }
+    return sqrtf(sum / samples);
+}
+uint8_t FILAMENT_ESTIMATOR::getStddevCount(float threshold)
+{
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < DETECTION_SAMPLE_SIZE; i++)
+    {
+        if (stddevArray[i] > threshold)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
+{
+    switch (message)
+    {
+    case NOTIFICATION_TEST_MESSAGE:
+        Blynk.notify(hostname + " test notification message");
+        drawOverlay("Test msg", "Sent", 1000);
+        Serial.println(F("Blynk notification message sent."));
+        break;
+    case NOTIFICATION_PRINT_STARTED:
+        Blynk.notify(hostname + " print job started.");
+        drawOverlay("Print job", "Started", 1000);
+        Serial.println(F("Blynk notification message: NOTIFICATION_PRINT_STARTED sent."));
+        break;
+    case NOTIFICATION_PRINT_COMPLETED:
+        Blynk.notify(hostname + " print job stopped.");
+        drawOverlay("Print job", "Stopped", 1000);
+        Serial.println(F("Blynk notification message: NOTIFICATION_PRINT_COMPLETED sent."));
+        break;
+    case NOTIFICATIONI_LOW_FILAMENT:
+        Blynk.notify(hostname + " low filament(" + setting.lowFilamentThreshold + "g).");
+        drawOverlay("Low", "Filament", 1000);
+        Serial.println(F("Blynk notification message: NOTIFICATIONI_LOW_FILAMENT sent."));
+        break;
+    default:
+        break;
     }
 }

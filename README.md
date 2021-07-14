@@ -4,7 +4,7 @@ This library is work in progress, not ready for general usage. It is registered 
 # Fuzzy-Spooder
 An add-on filament autochanger for existing 3D printers, in duel-spool configuration.
 
-- Firmware version: 0.4.0
+- Firmware version: 0.5.0
 - Config version: 0.3.0
 
 
@@ -148,6 +148,8 @@ There are three main pages:
   - Tare: Perform a tare.
   - Calibrate: Perform a calibration. Calibrated Value will be saved to EEPROM.
   - Spool Holder Weight: Set spool holder weight, or load preset values.
+  - Set Spooder ID: Set the unique spooder ID.
+  - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 50 g.
   - Debug: Various debugging functions.
 
 #### Spool Holder Weight
@@ -171,6 +173,17 @@ Add this line in your sketch setup:
 The user needs to set an unique Spooder ID in the UI for each unit. The ID consists of a letter (from A to Z) and a number (from 1 to 99). For example, A1, B13, C3, etc... 
 
 The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" also works. If the mDNS isn't availble, IP address can always be used.
+
+#### Notification
+
+There are several conditions that will trigger the notification:
+
+- Print job started: When the filament is constantly being pulled by the extruder. There will be some ~30 seconds lag for the detection.
+- Print job completed: When the weight measured is being at rest after print job started.
+- Low filament warning: When the remaining filament weight is less than a preset value. (default value is 50 g). This threshold can be adjusted in the menu. This notification can only be triggered once during each print.
+
+The nofification is sent through the [Blynk App](https://docs.blynk.cc/).
+
 
 #### Browser File System
 
@@ -204,3 +217,13 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 
 - Maximum allowed body length is 120 symbols;
 - Every device can send only 1 notification every 5 seconds;
+
+#### Printing Status
+
+Printing status based on weight change pattern is defined as follow:
+
+- STATUS_EMPTY
+  - filamnetWeight < emptyThreshold
+  
+- STATUS_IDLE
+- STATUS_PRINTING

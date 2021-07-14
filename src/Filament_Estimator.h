@@ -16,9 +16,10 @@
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
+
+//Rotary library
 #include "ESPRotary.h"
 #include "Button2.h"
-
 #define ROTARY_PIN_CLK D3
 #define ROTARY_PIN_DT D4
 #define DEFAULT_STEPS_PER_CLICK 4
@@ -36,6 +37,11 @@
 #define HX711_DOUT_PIN D5 //mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  //mcu > HX711 sck pin
 
+//Network time function
+#include <TZ.h>
+#define MYTZ TZ_Asia_Taipei
+//#define MYTZ TZ_America_Los_Angeles
+
 //File system
 #include <ArduinoJson.h>
 #include "FS.h"
@@ -51,9 +57,12 @@
 #define ENABLE_SERIAL_DEBUG
 #endif
 
+//Detection
+#include <math.h>
+#define DETECTION_SAMPLE_SIZE 30
+
 #define DEFAULT_SPOOL_HOLDER_WEIGHT 180
 #define DEFAULT_TOTAL_WEIGHT 1180
-#define DEFAULT_EMPTY_THRESHOLD -30
 #define DEFAULT_CALIBRATION_VALUE 250.0
 
 #define WIFI_STATUS_DISABLED 0
@@ -102,11 +111,20 @@
 #define SPOODER_ID_USER_SET 0x65
 #define SPOODER_ID_SYSTEM_SET 0x67
 
+#define PAGE_LOW_FILAMENT_SETUP 60
+#define LOW_FILAMENT_4_DIGIT 0
+#define LOW_FILAMENT_3_DIGIT 1
+#define LOW_FILAMENT_2_DIGIT 2
+#define LOW_FILAMENT_1_DIGIT 3
+#define LOW_FILAMENT_OK 4
+#define LOW_FILAMENT_CANCEL 5
+#define DEFAULT_LOW_FILAMENT_THRESHOLD_VALUE 50
+
 #define MENU_TARE 0
 #define MENU_CALIBRATE 1
 #define MENU_SPOOL_HOLDER_WEIGHT 2
 #define MENU_SET_SPOODER_ID 3
-#define MENU_SETUP 4
+#define MENU_LOW_FILAMENT_WEIGHT 4
 #define MENU_DEBUG 8
 #define DEBUG_LOAD_TO_SETTING 0
 #define DEBUG_SAVE_TO_EEPROM 1
@@ -120,7 +138,10 @@
 #define DEBUG_BLYNK_NOTIFY 9
 #define DEBUG_START_LOGGING 10
 #define DEBUG_STOP_LOGGING 11
-#define DEBUG_RETURN 12
+#define DEBUG_RUN_LOG_TXT 12
+#define DEBUG_STOP_LOG_TXT 13
+#define DEBUG_TOGGLE_DETECTION_OUTPUT 14
+#define DEBUG_RETURN 15
 
 #define DECLARED_EEPROM_SIZE 1024
 #define EEPROM_START_ADDRESS 0
@@ -214,6 +235,7 @@ private:
     byte spooderIDSetStatus;
     uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
     uint8_t spooderIDNumber; //1 - 99
+    uint16_t lowFilamentThreshold;
   } setting;
 
   //wifi related
@@ -239,7 +261,7 @@ private:
                          "Calibrate",
                          "Spool Holder Weight",
                          "Set Spooder ID",
-                         "WIFI Setup(X)",
+                         "Low Filament Setup",
                          "Notification(X)",
                          "Spood Holder(X)",
                          "Instruction(X)",
@@ -258,6 +280,7 @@ private:
   uint32_t stabilizingTime = 2000;
   bool newDataReady = false;
   float totalWeight;
+  float previousTotalWeight;
   uint32_t updateHomepageTimer;
   //The period to refresh homepage (weight)
   const uint32_t UPDATE_HOMEPAGE_PERIOD = 200;
@@ -274,7 +297,6 @@ private:
 
   uint8_t displayType = DISPLAY_TYPE_FILAMENT;
   float filamentWeight;
-  float emptyThreshold = DEFAULT_EMPTY_THRESHOLD;
 
   uint8_t calibrateSelection = CALIBRATE_4_DIGIT;
   bool calibrateEditDigitMode = false;
@@ -290,11 +312,24 @@ private:
   const uint32_t CALIBRATE_EDIT_MODE_PERIOD = 500;
   uint8_t calibrateSaveSelection = CALIBRATE_SAVE_OK;
 
+  uint8_t lowFilamentSelection = LOW_FILAMENT_2_DIGIT;
+  bool lowFilamentEditDigitMode = false;
+  uint8_t lowFilament4Digit = 0;
+  uint8_t lowFilament3Digit = 0;
+  uint8_t lowFilament2Digit = 0;
+  uint8_t lowFilament1Digit = 0;
+  uint16_t getLowFilamentThreshold();
+  void checkLowFilamentEditModeTimer();
+  bool displayLowFilamentDigit = true;
+  uint32_t lowFilamentEditModerTimer;
+  const uint32_t LOW_FILAMENT_EDIT_MODE_PERIOD = 500;
+  bool lowFilamentNotificationSent = false;
+
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-  uint8_t numberOfDebugMenuItems = 13;
-  String debugMenuTitle[13] = {
+  uint8_t numberOfDebugMenuItems = 16;
+  String debugMenuTitle[16] = {
       "Load To Setting",
       "Save To EEPROM",
       "Dump Setting",
@@ -307,7 +342,10 @@ private:
       "Send Blynk Test Message",
       "Start Logging",
       "Stop Logging",
-      "Return to Menu"};
+      "Start Emulation",
+      "Stop Emulation",
+      "Toogle Detection Output",
+      "<<-- Return to Menu "};
   void loadToSetting();
   void saveToEEPROM();
   void dumpSetting();
@@ -410,6 +448,56 @@ private:
   void updateLogging();
   time_t now;
   time_t previous;
+
+  //Logged data emulation
+  void startEmulation();  //emulate the logged data, using log/log.txt
+  void stopEmulation();   //stop the emulation
+  void updateEmulation(); //update emulated weight
+  bool emulationStarted = false;
+  uint32_t emulationTimer;
+  uint32_t EMULATION_PERIOD = 1000;
+  float emulatedWeight;
+  File emulatedLogFile;
+
+  //Status detection using average and std dev
+  //function imported from https://github.com/MajenkoLibraries/Average
+  uint32_t DETECTION_PERIOD = 1000;
+  uint32_t detectionTimer;
+  void updateDetection();
+  uint16_t weightCount = 0;
+  uint16_t stddevCount = 0;
+  uint16_t detectionPosition = 0;
+  uint16_t stddevPosition = 0;
+  float weightArray[DETECTION_SAMPLE_SIZE];
+  float stddevArray[DETECTION_SAMPLE_SIZE];
+  void pushWeight(float entry);
+  void pushStddev(float entry);
+  void purgeWeight(float value);
+  void purgeStddev(float value);
+  uint8_t purgeCounter = 0;
+  enum PRINTING_STATUS
+  {
+    STATUS_BOOT,
+    STATUS_EMPTY,
+    STATUS_IDLE,
+    STATUS_PRINTING,
+    STATUS_
+  } printingStatus;
+  String printingStatusString;
+  bool detectionDebugOutput = true;
+  float getSum(uint16_t samples);
+  float getMean(uint16_t samples);   //retern mean of the latest number of samples
+  float getStddev(uint16_t samples); //retern stddev of the latest number of samples
+  uint8_t getStddevCount(float threshold);
+
+  enum NOTIFICATION_MESSAGE
+  {
+    NOTIFICATION_TEST_MESSAGE,
+    NOTIFICATION_PRINT_STARTED,
+    NOTIFICATION_PRINT_COMPLETED,
+    NOTIFICATIONI_LOW_FILAMENT
+  } notificationMessage;
+  void notify(NOTIFICATION_MESSAGE message);
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
