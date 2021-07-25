@@ -4,7 +4,7 @@ This library is work in progress, not ready for general usage. It is registered 
 # Fuzzy-Spooder
 An add-on filament autochanger for existing 3D printers, in duel-spool configuration.
 
-- Firmware version: 0.5.0
+- Firmware version: 0.6.0
 - Config version: 0.3.0
 
 
