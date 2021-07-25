@@ -150,6 +150,7 @@ There are three main pages:
   - Spool Holder Weight: Set spool holder weight, or load preset values.
   - Set Spooder ID: Set the unique spooder ID.
   - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 50 g.
+  - Notification: User option to enable or disable each notification type. 
   - Debug: Various debugging functions.
 
 #### Spool Holder Weight
@@ -178,9 +179,12 @@ The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefi
 
 There are several conditions that will trigger the notification:
 
-- Print job started: When the filament is constantly being pulled by the extruder. There will be some ~30 seconds lag for the detection.
-- Print job completed: When the weight measured is being at rest after print job started.
-- Low filament warning: When the remaining filament weight is less than a preset value. (default value is 50 g). This threshold can be adjusted in the menu. This notification can only be triggered once during each print.
+- **Print job started**: When the filament is constantly being pulled by the extruder. There will be some ~30 seconds lag for the detection.
+- **Print job completed**: When the weight measured is being at rest after print job started.
+- **Low filament warning**: When the remaining filament weight is less than a preset value. (default value is 50 g). This threshold can be adjusted in the menu. This notification can only be triggered once during each print.
+- **Fall off rack warning**: When the detected weight is less than spool holder weight (minus a threshold) during printing. This notification can only be triggered once during each print, and inhibits low filament warning.
+
+User has the option to enable or disable each notification type in the UI **Notification** page. These options are stored in EEPROM and enabled by default.
 
 The nofification is sent through the [Blynk App](https://docs.blynk.cc/).
 

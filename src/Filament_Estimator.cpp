@@ -149,6 +149,38 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
     lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
+    //Initialize notification settings for the first time
+    if (setting.notifyOnPrintStarted == 255)
+    {
+        setting.notifyOnPrintStarted = true;
+        isDirty = true;
+    }
+    if (setting.notifyOnPrintCompleted == 255)
+    {
+        setting.notifyOnPrintCompleted = true;
+        isDirty = true;
+    }
+    if (setting.notifyOnLowFilament == 255)
+    {
+        setting.notifyOnLowFilament = true;
+        isDirty = true;
+    }
+    if (setting.notifyOnFallOffRack == 255)
+    {
+        setting.notifyOnFallOffRack = true;
+        isDirty = true;
+    }
+    if (setting.notifyOnFallOffBearing == 255)
+    {
+        setting.notifyOnFallOffBearing = true;
+        isDirty = true;
+    }
+    if (setting.notifyOnTangled == 255)
+    {
+        setting.notifyOnTangled = true;
+        isDirty = true;
+    }
+
     if (isDirty == true)
     {
         Serial.println(F("Initializing EEPROM"));
@@ -300,6 +332,11 @@ void FILAMENT_ESTIMATOR::updateWifi()
             Serial.println(F("Wifi connected."));
             Serial.print("IP Address = ");
             Serial.println(WiFi.localIP().toString());
+            if (currentPage == PAGE_INFO)
+            {
+                //update the wifi/ip info
+                displayPage(PAGE_INFO);
+            }
             beginServices();
         }
         break;
@@ -520,8 +557,11 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case MENU_SET_SPOODER_ID:
                 setPage(PAGE_SET_SPOODER_ID);
                 break;
-            case MENU_LOW_FILAMENT_WEIGHT:
+            case MENU_LOW_FILAMENT_SETUP:
                 setPage(PAGE_LOW_FILAMENT_SETUP);
+                break;
+            case MENU_NOTIFICATION:
+                setPage(PAGE_NOTIFICATION);
                 break;
             case MENU_DEBUG:
                 setPage(PAGE_DEBUG);
@@ -766,6 +806,26 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             }
             break;
+        case PAGE_NOTIFICATION:
+            switch (notificationMenuSelection)
+            {
+            case NOTIFICATION_MENU_PRINT_STARTED:
+            case NOTIFICATION_MENU_PRINT_COMPLETED:
+            case NOTIFICATION_MENU_LOW_FILAMENTT:
+            case NOTIFICATION_MENU_FALL_OFF_RACK:
+            case NOTIFICATION_MENU_FALL_OFF_BEARING:
+            case NOTIFICATION_MENU_TANGLED:
+                //Toogle the selected settings
+                setNotificationSetting(notificationMenuSelection, !getNotificationSetting(notificationMenuSelection));
+                displayPage(PAGE_NOTIFICATION);
+                break;
+            case NOTIFICATION_MENU_RETURN:
+                notificationMenuSelection = NOTIFICATION_MENU_PRINT_STARTED;
+                notificationMenuItemStartIndex = NOTIFICATION_MENU_PRINT_STARTED;
+                setPage(PAGE_MENU);
+                break;
+            }
+            break;
         case PAGE_DEBUG:
             switch (debugMenuSelection)
             {
@@ -858,10 +918,11 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
     switch (direction)
     {
     case RE_LEFT:
-        //rotateCCW();
+    {
         switch (currentPage)
         {
         case PAGE_MENU:
+        {
             if (menuIndex > 0)
             {
                 menuIndex--;
@@ -876,10 +937,14 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 setPage(PAGE_INFO);
             }
             break;
+        }
         case PAGE_INFO:
+        {
             setPage(PAGE_HOME);
             break;
+        }
         case PAGE_CALIBRATE:
+        {
             switch (calibrateEditDigitMode)
             {
             case true:
@@ -933,6 +998,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_TARE:
         {
             if (tareSelection == TARE_CANCEL)
@@ -940,9 +1006,11 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 tareSelection = TARE_OK;
                 setPage(PAGE_TARE);
             }
+
+            break;
         }
-        break;
         case PAGE_CALIBRATE_CONFIRM:
+        {
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_CANCEL:
@@ -951,7 +1019,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_SPOOL_HOLDER_WEIGHT:
+        {
             switch (spoolHolderEditDigitMode)
             {
             case true:
@@ -1003,7 +1073,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_SET_SPOODER_ID:
+        {
             switch (setSpooderIDEditMode)
             {
             case true:
@@ -1038,7 +1110,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_LOW_FILAMENT_SETUP:
+        {
             switch (lowFilamentEditDigitMode)
             {
             case true:
@@ -1092,7 +1166,23 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
+        case PAGE_NOTIFICATION:
+        {
+            if (notificationMenuSelection > NOTIFICATION_MENU_PRINT_STARTED)
+            {
+                notificationMenuSelection--;
+                if (notificationMenuSelection < notificationMenuItemStartIndex)
+                {
+                    notificationMenuItemStartIndex--;
+                }
+                setPage(PAGE_NOTIFICATION);
+            }
+
+            break;
+        }
         case PAGE_DEBUG:
+        {
             if (debugMenuSelection > DEBUG_LOAD_TO_SETTING)
             {
                 debugMenuSelection--;
@@ -1102,19 +1192,29 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 }
                 setPage(PAGE_DEBUG);
             }
+
+            break;
         }
+
+        } //switch (currentPage)
         break;
+    } //case RE_LEFT:
     case RE_RIGHT:
-        //rotateCW();
+    {
         switch (currentPage)
         {
         case PAGE_HOME:
+        {
             setPage(PAGE_INFO);
             break;
+        }
         case PAGE_INFO:
+        {
             setPage(PAGE_MENU);
             break;
+        }
         case PAGE_MENU:
+        {
             if (menuIndex < (numberOfMenuItems - 1))
             {
                 menuIndex++;
@@ -1125,14 +1225,18 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 setPage(PAGE_MENU);
             }
             break;
+        }
         case PAGE_TARE:
+        {
             if (tareSelection == TARE_OK)
             {
                 tareSelection = TARE_CANCEL;
                 setPage(PAGE_TARE);
             }
             break;
+        }
         case PAGE_CALIBRATE:
+        {
             switch (calibrateEditDigitMode)
             {
             case true:
@@ -1186,7 +1290,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_CALIBRATE_CONFIRM:
+        {
             switch (calibrateSaveSelection)
             {
             case CALIBRATE_SAVE_OK:
@@ -1195,7 +1301,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_SPOOL_HOLDER_WEIGHT:
+        {
             switch (spoolHolderEditDigitMode)
             {
             case true:
@@ -1261,7 +1369,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_SET_SPOODER_ID:
+        {
             switch (setSpooderIDEditMode)
             {
             case true:
@@ -1296,7 +1406,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
         case PAGE_LOW_FILAMENT_SETUP:
+        {
             switch (lowFilamentEditDigitMode)
             {
             case true:
@@ -1350,7 +1462,22 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 break;
             }
             break;
+        }
+        case PAGE_NOTIFICATION:
+        {
+            if (notificationMenuSelection < (numberOfNotificationMenuItems - 1))
+            {
+                notificationMenuSelection++;
+                if (notificationMenuSelection >= notificationMenuItemStartIndex + notificationMenuItemPerPage)
+                {
+                    notificationMenuItemStartIndex++;
+                }
+                setPage(PAGE_NOTIFICATION);
+            }
+            break;
+        }
         case PAGE_DEBUG:
+        {
             if (debugMenuSelection < (numberOfDebugMenuItems - 1))
             {
                 debugMenuSelection++;
@@ -1360,13 +1487,15 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 }
                 setPage(PAGE_DEBUG);
             }
+            break;
         }
 
+        } //switch (currentPage)
+
         break;
-    }
-    //Serial.print(rotary.directionToString(rotary.getDirection()));
-    //Serial.print("  ");
-    //Serial.println(rotary.getPosition());
+    } //case RE_RIGHT:
+
+    } //switch (direction)
 }
 bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
@@ -1510,13 +1639,15 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         String f = String(setting.version.major) + "." + String(setting.version.minor) + "." + String(setting.version.patch);
         display.drawString(6, 22, "Firmware: " + f);
         display.drawString(6, 32, "CAL Value: " + String(setting.calValue));
-        display.drawString(6, 42, "IP:" + WiFi.localIP().toString());
+        display.drawString(6, 42, "Wifi: " + WiFi.SSID());
+        display.drawString(6, 52, "IP:" + WiFi.localIP().toString());
         drawSymbols();
         drawRightIndicator(1);
         drawDisplay();
     }
     break;
     case PAGE_MENU:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1537,8 +1668,11 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawSymbols();
 
         drawDisplay();
+
         break;
+    }
     case PAGE_TARE:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1562,7 +1696,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawDisplay();
         break;
+    }
     case PAGE_CALIBRATE:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1635,7 +1771,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(96, 46, "Cancel");
         drawDisplay();
         break;
+    }
     case PAGE_CALIBRATE_CONFIRM:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1660,6 +1798,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawDisplay();
         break;
+    }
     case PAGE_SPOOL_HOLDER_WEIGHT:
     { //need this because variable is defined in case
         display.clear();
@@ -1754,8 +1893,9 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         }
 
         drawDisplay();
+
+        break;
     }
-    break;
     case PAGE_SET_SPOODER_ID:
     {
         display.clear();
@@ -1858,6 +1998,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
     }
     break;
     case PAGE_LOW_FILAMENT_SETUP:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1930,7 +2071,37 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(96, 46, "Cancel");
         drawDisplay();
         break;
+    }
+    case PAGE_NOTIFICATION:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Notification");
+        display.drawRect(0, 12, 128, 1);
+
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.drawString(6, 12, notificationMenuTitle[notificationMenuItemStartIndex]);
+        display.drawString(100, 12, (getNotificationSetting(notificationMenuItemStartIndex) == true) ? "On" : "    Off");
+        display.drawString(6, 22, notificationMenuTitle[notificationMenuItemStartIndex + 1]);
+        display.drawString(100, 22, (getNotificationSetting(notificationMenuItemStartIndex + 1) == true) ? "On" : "    Off");
+        display.drawString(6, 32, notificationMenuTitle[notificationMenuItemStartIndex + 2]);
+        display.drawString(100, 32, (getNotificationSetting(notificationMenuItemStartIndex + 2) == true) ? "On" : "    Off");
+        display.drawString(6, 42, notificationMenuTitle[notificationMenuItemStartIndex + 3]);
+        display.drawString(100, 42, (getNotificationSetting(notificationMenuItemStartIndex + 3) == true) ? "On" : "    Off");
+        display.drawString(6, 52, notificationMenuTitle[notificationMenuItemStartIndex + 4]);
+        if (notificationMenuItemStartIndex + 4 != NOTIFICATION_MENU_RETURN)
+        {
+            display.drawString(100, 52, (getNotificationSetting(notificationMenuItemStartIndex + 4) == true) ? "On" : "    Off");
+        }
+
+        drawLeftIndicator(notificationMenuSelection - notificationMenuItemStartIndex);
+        drawDisplay();
+        break;
+    }
     case PAGE_DEBUG:
+    {
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -1947,6 +2118,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawLeftIndicator(debugMenuSelection - debugMenuItemStartIndex);
         drawDisplay();
         break;
+    }
 
     default:
         break;
@@ -2319,6 +2491,28 @@ void FILAMENT_ESTIMATOR::dumpSetting()
 
     Serial.print(F("  - spooderIDNumber: "));
     Serial.println(setting.spooderIDNumber);
+
+    Serial.print(F("  - lowFilamentThreshold: "));
+    Serial.println(setting.lowFilamentThreshold);
+
+    Serial.print(F("  - notifyOnPrintStarted: "));
+
+    Serial.println(setting.notifyOnPrintStarted);
+
+    Serial.print(F("  - notifyOnPrintCompleted: "));
+    Serial.println(setting.notifyOnPrintCompleted);
+
+    Serial.print(F("  - notifyOnLowFilament: "));
+    Serial.println(setting.notifyOnLowFilament);
+
+    Serial.print(F("  - notifyOnFallOffRack: "));
+    Serial.println(setting.notifyOnFallOffRack);
+
+    Serial.print(F("  - notifyOnFallOffBearing: "));
+    Serial.println(setting.notifyOnFallOffBearing);
+
+    Serial.print(F("  - notifyOnTangled: "));
+    Serial.println(setting.notifyOnTangled);
 
     Serial.println(F("Setting dump completed."));
 }
@@ -3129,6 +3323,7 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     pushWeight(totalWeight);
     pushStddev(stddev3);
+    //calculate how many samples has the stddev3>1 condition, in the last 30 seconds
     uint8_t stddev3Count = getStddevCount(1.0);
 
     time_t now = time(nullptr);
@@ -3214,8 +3409,6 @@ void FILAMENT_ESTIMATOR::updateDetection()
         loggerCounter++;
     }
 
-    //calculate how many samples has the stddev3>1 condition, in the last 30 seconds
-
     switch (printingStatus)
     {
     case STATUS_BOOT:
@@ -3278,9 +3471,14 @@ void FILAMENT_ESTIMATOR::updateDetection()
         }
         else if (getStddev(30) >= 1 && getStddev(30) < 30 && stddev3Count >= 10)
         {
+            //Print started
             //From STATUS_IDLE to STATUS_PRINTING
             //(1) 30 sec stddev between 1 and 30
             //(2) 10 of the last 30 stddev(3) samples is more than 1.0
+
+            //Reset all notification flags
+            lowFilamentNotificationSent = false;
+            fallOffRackNotificationSent = false;
 
             printingStatus = STATUS_PRINTING;
             printingStatusString = "STATUS_PRINTING";
@@ -3300,13 +3498,14 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
         break;
     case STATUS_PRINTING:
-        if (getStddev(30) < 1)
+        if (getStddev(30) < 0.5 && stddev3Count < 3)
         {
+            //print job completed
             printingStatus = STATUS_IDLE;
             printingStatusString = "STATUS_IDLE";
             Serial.println(F("Status changed from STATUS_PRINTING to STATUS_IDLE."));
             notify(NOTIFICATION_PRINT_COMPLETED);
-            lowFilamentNotificationSent = false; //reset low filament notification flag
+
             if (isLogging == true)
             {
                 String record;
@@ -3318,12 +3517,26 @@ void FILAMENT_ESTIMATOR::updateDetection()
                 logFile.println(record);
             }
         }
-        if(lowFilamentNotificationSent == false)
+
+        if (fallOffRackNotificationSent == false)
         {
-            if(filamentWeight<setting.lowFilamentThreshold)
+            if (getStddev(10) > 100 && getMean(3) < (setting.spoolHolderWeight - 50))
             {
+                //fall of rack, once per print, reset flag upon new print
+                notify(NOTIFICATIONI_FALL_OFF_RACK);
+                fallOffRackNotificationSent = true;
+
+                lowFilamentNotificationSent = true; //inhibit low filament notification
+            }
+        }
+
+        if (lowFilamentNotificationSent == false)
+        {
+            if (filamentWeight < setting.lowFilamentThreshold && getStddev(30) < 30)
+            {
+                //notification sent once per print, reset flag upon new print
                 notify(NOTIFICATIONI_LOW_FILAMENT);
-                lowFilamentNotificationSent = true; //notification sent once per print
+                lowFilamentNotificationSent = true;
             }
         }
         break;
@@ -3486,21 +3699,109 @@ void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
         Serial.println(F("Blynk notification message sent."));
         break;
     case NOTIFICATION_PRINT_STARTED:
-        Blynk.notify(hostname + " print job started.");
+        if (setting.notifyOnPrintStarted == true)
+        {
+            Blynk.notify(hostname + " print job started.");
+        }
         drawOverlay("Print job", "Started", 1000);
-        Serial.println(F("Blynk notification message: NOTIFICATION_PRINT_STARTED sent."));
+        Serial.println(F("NOTIFICATION_PRINT_STARTED"));
         break;
     case NOTIFICATION_PRINT_COMPLETED:
-        Blynk.notify(hostname + " print job stopped.");
-        drawOverlay("Print job", "Stopped", 1000);
-        Serial.println(F("Blynk notification message: NOTIFICATION_PRINT_COMPLETED sent."));
+        if (setting.notifyOnPrintCompleted == true)
+        {
+            Blynk.notify(hostname + " print job completed.");
+        }
+        drawOverlay("Print job", "Completed", 1000);
+        Serial.println(F("NOTIFICATION_PRINT_COMPLETED"));
         break;
     case NOTIFICATIONI_LOW_FILAMENT:
-        Blynk.notify(hostname + " low filament(" + setting.lowFilamentThreshold + "g).");
+        if (setting.notifyOnLowFilament == true)
+        {
+            Blynk.notify(hostname + " low filament(" + setting.lowFilamentThreshold + "g).");
+        }
         drawOverlay("Low", "Filament", 1000);
-        Serial.println(F("Blynk notification message: NOTIFICATIONI_LOW_FILAMENT sent."));
+        Serial.println(F("NOTIFICATIONI_LOW_FILAMENT"));
+        break;
+    case NOTIFICATIONI_FALL_OFF_RACK:
+        if (setting.notifyOnFallOffRack == true)
+        {
+            Blynk.notify(hostname + " fall off rack.");
+        }
+        drawOverlay("Fall Off", "Rack", 1000);
+        Serial.println(F("NOTIFICATIONI_FALL_OFF_RACK"));
+        break;
+    case NOTIFICATIONI_FALL_OFF_BEARING:
+        if (setting.notifyOnFallOffBearing == true)
+        {
+            Blynk.notify(hostname + " fall off bearing.");
+        }
+        drawOverlay("Fall Off", "Bearing", 1000);
+        Serial.println(F("NOTIFICATIONI_FALL_OFF_BEARING"));
+        break;
+    case NOTIFICATIONI_TANGLED:
+        if (setting.notifyOnTangled == true)
+        {
+            Blynk.notify(hostname + " tangled.");
+        }
+        drawOverlay("Filament", "Tangled", 1000);
+        Serial.println(F("NOTIFICATIONI_TANGLED"));
         break;
     default:
         break;
     }
+}
+bool FILAMENT_ESTIMATOR::getNotificationSetting(uint8_t selection)
+{
+    bool result = false;
+    switch (selection)
+    {
+    case NOTIFICATION_MENU_PRINT_STARTED:
+        result = setting.notifyOnPrintStarted;
+        break;
+    case NOTIFICATION_MENU_PRINT_COMPLETED:
+        result = setting.notifyOnPrintCompleted;
+        break;
+    case NOTIFICATION_MENU_LOW_FILAMENTT:
+        result = setting.notifyOnLowFilament;
+        break;
+    case NOTIFICATION_MENU_FALL_OFF_RACK:
+        result = setting.notifyOnFallOffRack;
+        break;
+    case NOTIFICATION_MENU_FALL_OFF_BEARING:
+        result = setting.notifyOnFallOffBearing;
+        break;
+    case NOTIFICATION_MENU_TANGLED:
+        result = setting.notifyOnTangled;
+        break;
+    default:
+        break;
+    }
+    return result;
+}
+void FILAMENT_ESTIMATOR::setNotificationSetting(uint8_t selection, bool value)
+{
+    switch (selection)
+    {
+    case NOTIFICATION_MENU_PRINT_STARTED:
+        setting.notifyOnPrintStarted = value;
+        break;
+    case NOTIFICATION_MENU_PRINT_COMPLETED:
+        setting.notifyOnPrintCompleted = value;
+        break;
+    case NOTIFICATION_MENU_LOW_FILAMENTT:
+        setting.notifyOnLowFilament = value;
+        break;
+    case NOTIFICATION_MENU_FALL_OFF_RACK:
+        setting.notifyOnFallOffRack = value;
+        break;
+    case NOTIFICATION_MENU_FALL_OFF_BEARING:
+        setting.notifyOnFallOffBearing = value;
+        break;
+    case NOTIFICATION_MENU_TANGLED:
+        setting.notifyOnTangled = value;
+        break;
+    default:
+        break;
+    }
+    saveToEEPROM();
 }

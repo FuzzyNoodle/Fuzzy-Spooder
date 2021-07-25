@@ -11,7 +11,7 @@
 
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
-#define CURRENT_VERSION_MINOR 4
+#define CURRENT_VERSION_MINOR 6
 #define CURRENT_VERSION_PATCH 0
 
 #include "Arduino.h"
@@ -118,13 +118,23 @@
 #define LOW_FILAMENT_1_DIGIT 3
 #define LOW_FILAMENT_OK 4
 #define LOW_FILAMENT_CANCEL 5
-#define DEFAULT_LOW_FILAMENT_THRESHOLD_VALUE 50
+#define DEFAULT_LOW_FILAMENT_THRESHOLD_VALUE 80
+
+#define PAGE_NOTIFICATION 70
+#define NOTIFICATION_MENU_PRINT_STARTED 0
+#define NOTIFICATION_MENU_PRINT_COMPLETED 1
+#define NOTIFICATION_MENU_LOW_FILAMENTT 2
+#define NOTIFICATION_MENU_FALL_OFF_RACK 3
+#define NOTIFICATION_MENU_FALL_OFF_BEARING 4
+#define NOTIFICATION_MENU_TANGLED 5
+#define NOTIFICATION_MENU_RETURN 6
 
 #define MENU_TARE 0
 #define MENU_CALIBRATE 1
 #define MENU_SPOOL_HOLDER_WEIGHT 2
 #define MENU_SET_SPOODER_ID 3
-#define MENU_LOW_FILAMENT_WEIGHT 4
+#define MENU_LOW_FILAMENT_SETUP 4
+#define MENU_NOTIFICATION 5
 #define MENU_DEBUG 8
 #define DEBUG_LOAD_TO_SETTING 0
 #define DEBUG_SAVE_TO_EEPROM 1
@@ -236,6 +246,12 @@ private:
     uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
     uint8_t spooderIDNumber; //1 - 99
     uint16_t lowFilamentThreshold;
+    uint8_t notifyOnPrintStarted;
+    uint8_t notifyOnPrintCompleted;
+    uint8_t notifyOnLowFilament;
+    uint8_t notifyOnFallOffRack;
+    uint8_t notifyOnFallOffBearing;
+    uint8_t notifyOnTangled;
   } setting;
 
   //wifi related
@@ -262,9 +278,9 @@ private:
                          "Spool Holder Weight",
                          "Set Spooder ID",
                          "Low Filament Setup",
-                         "Notification(X)",
-                         "Spood Holder(X)",
-                         "Instruction(X)",
+                         "Notification",
+                         "Reserved1",
+                         "Reserved2",
                          "Debug"};
   uint8_t tareSelection = TARE_OK;
   void drawTriangle(uint8_t x, uint8_t y);
@@ -323,15 +339,14 @@ private:
   bool displayLowFilamentDigit = true;
   uint32_t lowFilamentEditModerTimer;
   const uint32_t LOW_FILAMENT_EDIT_MODE_PERIOD = 500;
-  bool lowFilamentNotificationSent = false;
 
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
   uint8_t numberOfDebugMenuItems = 16;
   String debugMenuTitle[16] = {
-      "Load To Setting",
-      "Save To EEPROM",
+      "Load to Setting",
+      "Save to EEPROM",
       "Dump Setting",
       "Dump EEPROM",
       "Erase EEPROM",
@@ -468,8 +483,8 @@ private:
   uint16_t stddevCount = 0;
   uint16_t detectionPosition = 0;
   uint16_t stddevPosition = 0;
-  float weightArray[DETECTION_SAMPLE_SIZE];
-  float stddevArray[DETECTION_SAMPLE_SIZE];
+  float weightArray[DETECTION_SAMPLE_SIZE]; //array to store weight
+  float stddevArray[DETECTION_SAMPLE_SIZE]; //array to store stddev3
   void pushWeight(float entry);
   void pushStddev(float entry);
   void purgeWeight(float value);
@@ -484,20 +499,50 @@ private:
     STATUS_
   } printingStatus;
   String printingStatusString;
-  bool detectionDebugOutput = true;
+  bool detectionDebugOutput = false;
   float getSum(uint16_t samples);
-  float getMean(uint16_t samples);   //retern mean of the latest number of samples
-  float getStddev(uint16_t samples); //retern stddev of the latest number of samples
-  uint8_t getStddevCount(float threshold);
+  float getMean(uint16_t samples);         //retern mean of the latest number of samples
+  float getStddev(uint16_t samples);       //retern stddev of the latest number of samples
+  uint8_t getStddevCount(float threshold); //return number of samples that are greater than threshold
 
+  //Notification functions
   enum NOTIFICATION_MESSAGE
   {
     NOTIFICATION_TEST_MESSAGE,
     NOTIFICATION_PRINT_STARTED,
     NOTIFICATION_PRINT_COMPLETED,
-    NOTIFICATIONI_LOW_FILAMENT
+    NOTIFICATIONI_LOW_FILAMENT,
+    NOTIFICATIONI_FALL_OFF_RACK,
+    NOTIFICATIONI_FALL_OFF_BEARING,
+    NOTIFICATIONI_TANGLED
   } notificationMessage;
   void notify(NOTIFICATION_MESSAGE message);
+  bool lowFilamentNotificationSent = false;
+  bool fallOffRackNotificationSent = false;
+  uint8_t notificationMenuSelection = NOTIFICATION_MENU_PRINT_STARTED;
+  uint8_t notificationMenuItemStartIndex = 0;
+  uint8_t notificationMenuItemPerPage = 5;
+  uint8_t numberOfNotificationMenuItems = 7;
+  String notificationMenuTitle[7] = {
+      "Print Started",
+      "Print Completed",
+      "Low Filament",
+      "Fall off Rack",
+      "Fall off Bearing",
+      "Tangled",
+      "<<-- Return to Menu "};
+  bool getNotificationSetting(uint8_t selection);
+  void setNotificationSetting(uint8_t selection, bool value);
 };
+
+/*
+#define NOTIFICATION_MENU_PRINT_STARTED 0
+#define NOTIFICATION_MENU_PRINT_COMPLETED 1
+#define NOTIFICATION_MENU_LOW_FILAMENTT 2
+#define NOTIFICATION_MENU_FALL_OFF_RACK 3
+#define NOTIFICATION_MENU_FALL_OFF_BEARING 4
+#define NOTIFICATION_MENU_TANGLED 5
+#define NOTIFICATION_MENU_RETURN 6
+*/
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
