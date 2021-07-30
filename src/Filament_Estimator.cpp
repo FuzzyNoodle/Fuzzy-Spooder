@@ -150,32 +150,32 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
     //Initialize notification settings for the first time
-    if (setting.notifyOnPrintStarted == 255)
+    if (setting.notifyOnPrintStarted != 0 || setting.notifyOnPrintStarted != 1)
     {
         setting.notifyOnPrintStarted = true;
         isDirty = true;
     }
-    if (setting.notifyOnPrintCompleted == 255)
+    if (setting.notifyOnPrintCompleted != 0 || setting.notifyOnPrintCompleted != 1)
     {
         setting.notifyOnPrintCompleted = true;
         isDirty = true;
     }
-    if (setting.notifyOnLowFilament == 255)
+    if (setting.notifyOnLowFilament != 0 || setting.notifyOnLowFilament != 1)
     {
         setting.notifyOnLowFilament = true;
         isDirty = true;
     }
-    if (setting.notifyOnFallOffRack == 255)
+    if (setting.notifyOnFallOffRack != 0 || setting.notifyOnFallOffRack != 1)
     {
         setting.notifyOnFallOffRack = true;
         isDirty = true;
     }
-    if (setting.notifyOnFallOffBearing == 255)
+    if (setting.notifyOnFallOffBearing != 0 || setting.notifyOnFallOffBearing != 1)
     {
         setting.notifyOnFallOffBearing = true;
         isDirty = true;
     }
-    if (setting.notifyOnTangled == 255)
+    if (setting.notifyOnTangled != 0 || setting.notifyOnTangled != 1)
     {
         setting.notifyOnTangled = true;
         isDirty = true;
@@ -337,6 +337,8 @@ void FILAMENT_ESTIMATOR::updateWifi()
                 //update the wifi/ip info
                 displayPage(PAGE_INFO);
             }
+            Serial.print("Hostname = ");
+            Serial.println(WiFi.getHostname());
             beginServices();
         }
         break;
@@ -355,11 +357,14 @@ void FILAMENT_ESTIMATOR::updateWifi()
 }
 void FILAMENT_ESTIMATOR::connectWifi()
 {
-    //WiFi.hostname("spooder01");
+
     /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
      would try to act as both a client and an access-point and could cause
      network-issues with your other WiFi-devices on your WiFi-network. */
     WiFi.mode(WIFI_STA);
+    Serial.print("Set WiFi Hostname to: ");
+    Serial.println(hostname);
+    WiFi.hostname(hostname); //Need this here for windows mDns to work
     WiFi.begin(wifi_ssid, wifi_password);
     Serial.print(F("Connecting to "));
     Serial.println(wifi_ssid);
@@ -399,6 +404,7 @@ void FILAMENT_ESTIMATOR::beginServices()
     server.begin();
 
     //Setup for OTA
+    ArduinoOTA.setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
     ArduinoOTA.onStart([]()
                        { Serial.println("Start"); });
     ArduinoOTA.onEnd([]()
@@ -420,6 +426,8 @@ void FILAMENT_ESTIMATOR::beginServices()
                                Serial.println("End Failed");
                        });
     ArduinoOTA.begin();
+    Serial.print("ArduinoOTA hostname: ");
+    Serial.println(ArduinoOTA.getHostname());
     Serial.println("ArduinoOTA setup ok.");
 
     configTime(MYTZ, "pool.ntp.org");
@@ -3699,52 +3707,59 @@ void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
         Serial.println(F("Blynk notification message sent."));
         break;
     case NOTIFICATION_PRINT_STARTED:
+        Serial.println(F("NOTIFICATION_PRINT_STARTED"));
         if (setting.notifyOnPrintStarted == true)
         {
             Blynk.notify(hostname + " print job started.");
+            Serial.println(F("Blynk NOTIFICATION_PRINT_STARTED sent."));
         }
         drawOverlay("Print job", "Started", 1000);
-        Serial.println(F("NOTIFICATION_PRINT_STARTED"));
+
         break;
     case NOTIFICATION_PRINT_COMPLETED:
+        Serial.println(F("NOTIFICATION_PRINT_COMPLETED"));
         if (setting.notifyOnPrintCompleted == true)
         {
             Blynk.notify(hostname + " print job completed.");
+            Serial.println(F("Blynk NOTIFICATION_PRINT_COMPLETED sent."));
         }
         drawOverlay("Print job", "Completed", 1000);
-        Serial.println(F("NOTIFICATION_PRINT_COMPLETED"));
         break;
     case NOTIFICATIONI_LOW_FILAMENT:
+        Serial.println(F("NOTIFICATIONI_LOW_FILAMENT"));
         if (setting.notifyOnLowFilament == true)
         {
             Blynk.notify(hostname + " low filament(" + setting.lowFilamentThreshold + "g).");
+            Serial.println(F("Blynk NOTIFICATIONI_LOW_FILAMENT sent."));
         }
         drawOverlay("Low", "Filament", 1000);
-        Serial.println(F("NOTIFICATIONI_LOW_FILAMENT"));
         break;
     case NOTIFICATIONI_FALL_OFF_RACK:
+        Serial.println(F("NOTIFICATIONI_FALL_OFF_RACK"));
         if (setting.notifyOnFallOffRack == true)
         {
             Blynk.notify(hostname + " fall off rack.");
+            Serial.println(F("Blynk NOTIFICATIONI_FALL_OFF_RACK sent."));
         }
         drawOverlay("Fall Off", "Rack", 1000);
-        Serial.println(F("NOTIFICATIONI_FALL_OFF_RACK"));
         break;
     case NOTIFICATIONI_FALL_OFF_BEARING:
+        Serial.println(F("NOTIFICATIONI_FALL_OFF_BEARING"));
         if (setting.notifyOnFallOffBearing == true)
         {
             Blynk.notify(hostname + " fall off bearing.");
+            Serial.println(F("Blynk NOTIFICATIONI_FALL_OFF_BEARING sent."));
         }
         drawOverlay("Fall Off", "Bearing", 1000);
-        Serial.println(F("NOTIFICATIONI_FALL_OFF_BEARING"));
         break;
     case NOTIFICATIONI_TANGLED:
+        Serial.println(F("NOTIFICATIONI_TANGLED"));
         if (setting.notifyOnTangled == true)
         {
             Blynk.notify(hostname + " tangled.");
+            Serial.println(F("Blynk NOTIFICATIONI_TANGLED sent."));
         }
         drawOverlay("Filament", "Tangled", 1000);
-        Serial.println(F("NOTIFICATIONI_TANGLED"));
         break;
     default:
         break;
