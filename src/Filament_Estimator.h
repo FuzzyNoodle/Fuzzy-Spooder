@@ -11,8 +11,9 @@
 
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
-#define CURRENT_VERSION_MINOR 6
-#define CURRENT_VERSION_PATCH 1
+#define CURRENT_VERSION_MINOR 7
+#define CURRENT_VERSION_PATCH 0
+#define CURRENT_VERSION "0.7.0"
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
@@ -151,7 +152,11 @@
 #define DEBUG_RUN_LOG_TXT 12
 #define DEBUG_STOP_LOG_TXT 13
 #define DEBUG_TOGGLE_DETECTION_OUTPUT 14
-#define DEBUG_RETURN 15
+#define DEBUG_QUERY_MDNS 15
+#define DEBUG_UPDATE_SERVICE_TXT 16
+#define DEBUG_PRINT_SPOODERS_DATASET 17
+#define DEBUG_CHECK_GITHUB_TAG 18
+#define DEBUG_RETURN 19
 
 #define DECLARED_EEPROM_SIZE 1024
 #define EEPROM_START_ADDRESS 0
@@ -169,6 +174,22 @@
 #define SYMBOL_WIFI_AND_INTERNET 2
 #define SYMBOL_WIFI_NO_INTERNET_1 3
 #define SYMBOL_WIFI_NO_INTERNET_2 4
+
+//mDNS
+#include <ESP8266mDNS.h>
+
+//Github auto update
+// A single, global CertStore which can be used by all
+// connections.  Needs to stay live the entire time any of
+// the WiFiClientBearSSLs are present.
+#include <CertStoreBearSSL.h>
+#include <ESP_OTA_GitHub.h>
+/* Set up values for your repository and binary names */
+#define GHOTA_USER "FuzzyNoodle"
+#define GHOTA_REPO "Fuzzy-Spooder"
+#define GHOTA_CURRENT_TAG CURRENT_VERSION
+#define GHOTA_BIN_FILE "fuzzy_spooder.bin"
+#define GHOTA_ACCEPT_PRERELEASE 1
 
 class FILAMENT_ESTIMATOR
 {
@@ -343,8 +364,9 @@ private:
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-  uint8_t numberOfDebugMenuItems = 16;
-  String debugMenuTitle[16] = {
+#define NUMBER_OF_DEBUG_ITEMS 20
+  uint8_t numberOfDebugMenuItems = NUMBER_OF_DEBUG_ITEMS;
+  String debugMenuTitle[NUMBER_OF_DEBUG_ITEMS] = {
       "Load to Setting",
       "Save to EEPROM",
       "Dump Setting",
@@ -360,6 +382,10 @@ private:
       "Start Emulation",
       "Stop Emulation",
       "Toogle Detection Output",
+      "Query mDNS",
+      "Update Service Txt",
+      "Print Spooders Dataset",
+      "Check Github tag",
       "<<-- Return to Menu "};
   void loadToSetting();
   void saveToEEPROM();
@@ -533,16 +559,16 @@ private:
       "<<-- Return to Menu "};
   bool getNotificationSetting(uint8_t selection);
   void setNotificationSetting(uint8_t selection, bool value);
-};
 
-/*
-#define NOTIFICATION_MENU_PRINT_STARTED 0
-#define NOTIFICATION_MENU_PRINT_COMPLETED 1
-#define NOTIFICATION_MENU_LOW_FILAMENTT 2
-#define NOTIFICATION_MENU_FALL_OFF_RACK 3
-#define NOTIFICATION_MENU_FALL_OFF_BEARING 4
-#define NOTIFICATION_MENU_TANGLED 5
-#define NOTIFICATION_MENU_RETURN 6
-*/
+  void queryMDNS();
+  MDNSResponder::hMDNSService spooderService = 0; // The handle of the spooder service in the MDNS responder
+  void updateServiceTxt();
+  void printSpoodersDataset();
+
+  //Github auto update
+  BearSSL::CertStore certStore;
+  uint16_t numCerts = 0; //number or certs read from file system
+  void checkGithubTag();
+};
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

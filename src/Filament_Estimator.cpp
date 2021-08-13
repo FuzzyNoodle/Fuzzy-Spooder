@@ -1,6 +1,6 @@
 #include "Filament_Estimator.h"
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
+
 #include <ArduinoOTA.h>
 #include <BlynkSimpleEsp8266.h>
 
@@ -48,6 +48,91 @@ static void outsideReplyOK()
     estimatorPointer->replyOK();
 }
 
+MDNSResponder::hMDNSServiceQuery hMDNSServiceQuery = 0; // The handle of the 'http.tcp' service query in the MDNS responder
+static void outsideMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
+{
+    String answerInfo;
+    answerInfo = String(serviceInfo.hostDomain()) + ": ";
+    switch (answerType)
+    {
+    case MDNSResponder::AnswerType::ServiceDomain:
+        answerInfo += "ServiceDomain " + String(serviceInfo.serviceDomain());
+        break;
+    case MDNSResponder::AnswerType::HostDomainAndPort:
+        answerInfo += "HostDomainAndPort " + String(serviceInfo.hostDomain()) + ":" + String(serviceInfo.hostPort());
+        break;
+    case MDNSResponder::AnswerType::IP4Address:
+        answerInfo += "IP4Address ";
+        for (IPAddress ip : serviceInfo.IP4Adresses())
+        {
+            answerInfo += "- " + ip.toString();
+        };
+        break;
+    case MDNSResponder::AnswerType::Txt:
+        answerInfo += "TXT " + String(serviceInfo.strKeyValue());
+        for (auto kv : serviceInfo.keyValues())
+        {
+            answerInfo += "\nkv : " + String(kv.first) + " : " + String(kv.second);
+        }
+        break;
+    default:
+        answerInfo = "Unknown Answertype";
+    }
+    Serial.printf("Answer %s %s\n", answerInfo.c_str(), p_bSetContent ? "Modified" : "Deleted");
+}
+static void outsideInstallDynamicServiceQuery()
+{
+    if (!hMDNSServiceQuery)
+    {
+        hMDNSServiceQuery = MDNS.installServiceQuery("spooder", "tcp", outsideMDNSServiceQueryCallback);
+        if (hMDNSServiceQuery)
+        {
+            Serial.printf("Service query for 'spooder.tcp' services installed.\n");
+        }
+        else
+        {
+            Serial.printf("FAILED to install service query for 'spooder.tcp' services!\n");
+        }
+    }
+}
+static void outsidePrintSpoodersDataset()
+{
+    uint16_t count = 0;
+    Serial.print(F("Local spooder services found: "));
+    Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
+
+    for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
+    {
+        count++;
+        Serial.print(String(count) + ".");
+        //Serial.print(info.serviceDomain());
+        if (info.hostDomainAvailable())
+        {
+            String s = "\tHostname: ";
+            s += String(info.hostDomain());
+            s += (info.hostPortAvailable()) ? (":" + String(info.hostPort())) : "";
+            Serial.println(s);
+        }
+        if (info.IP4AddressAvailable())
+        {
+            String s = "\tIP4:";
+            for (auto ip : info.IP4Adresses())
+            {
+                s += " " + ip.toString();
+            }
+            Serial.println(s);
+        }
+        if (info.txtAvailable())
+        {
+            String s = "\tTXT:";
+            for (auto kv : info.keyValues())
+            {
+                s += "\t" + String(kv.first) + " : " + String(kv.second) + "\n";
+            }
+            Serial.println(s);
+        }
+    }
+}
 FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
                                            button{BUTTON_PIN},
                                            rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, stepsPerClick},
@@ -92,6 +177,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         //listDir("");
     }
 
+    numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
+    Serial.print(F("Number of CA certs read: "));
+    Serial.println(numCerts);
+
     displayMonoBitmap("/images/logo.bmp");
 
     //Setup for rotary switch
@@ -114,22 +203,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     loadToSetting();
     //validate data and reset to defaults
     bool isDirty = false;
-    if (setting.version.major > 99)
-    {
-        setting.version.major = 0;
-        isDirty = true;
-    }
 
-    if (setting.version.minor > 99)
-    {
-        setting.version.minor = 0;
-        isDirty = true;
-    }
-    if (setting.version.patch > 99)
-    {
-        setting.version.patch = 0;
-        isDirty = true;
-    }
     if (isnan(setting.calValue))
     {
         Serial.println(F("EEPROM calValue invalid, using default value."));
@@ -200,6 +274,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     else if (versionToNumber(currentVersion) < versionToNumber(setting.version))
     {
         Serial.println(F("Older version number of firmware uploaded."));
+        setting.version.major = currentVersion.major;
+        setting.version.minor = currentVersion.minor;
+        setting.version.patch = currentVersion.patch;
+        saveToEEPROM();
     }
     else
     {
@@ -456,7 +534,11 @@ void FILAMENT_ESTIMATOR::beginmDNS()
         if (MDNS.begin(hostname) == true)
         {
             Serial.println(F(" succeeded."));
-            MDNS.addService("http", "tcp", 80);
+
+            //add service announcements
+            MDNS.addService(0, "http", "tcp", 80);                     //for web access
+            spooderService = MDNS.addService(0, "spooder", "tcp", 80); //for inter-device data exchange, using websocket
+            outsideInstallDynamicServiceQuery();
         }
         else
         {
@@ -504,6 +586,7 @@ void FILAMENT_ESTIMATOR::checkConnectionStatus()
     {
         connectionStatus = CONNECTION_STATUS_WIFI_AND_INTERNET;
         //Todo: check internet connection
+        checkGithubTag();
         return;
     }
     else
@@ -895,6 +978,21 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 {
                     Serial.println(F("off."));
                 }
+                break;
+            case DEBUG_QUERY_MDNS:
+                drawOverlay("Query", "mDNS", 1000);
+                queryMDNS();
+                break;
+            case DEBUG_UPDATE_SERVICE_TXT:
+                drawOverlay("Update", "Srvc Txt", 1000);
+                updateServiceTxt();
+                break;
+            case DEBUG_PRINT_SPOODERS_DATASET:
+                drawOverlay("Print", "Spooders", 1000);
+                printSpoodersDataset();
+                break;
+            case DEBUG_CHECK_GITHUB_TAG:
+                checkGithubTag();
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -3819,4 +3917,76 @@ void FILAMENT_ESTIMATOR::setNotificationSetting(uint8_t selection, bool value)
         break;
     }
     saveToEEPROM();
+}
+void FILAMENT_ESTIMATOR::queryMDNS()
+{
+    Serial.println(F("Query 'spooder' services in the local network:"));
+    int n = MDNS.queryService("spooder", "tcp"); // Send out query for esp tcp services
+    Serial.println(F("mDNS query done"));
+    if (n == 0)
+    {
+        Serial.println("no services found");
+    }
+    else
+    {
+        Serial.print(n);
+        Serial.println(" service(s) found");
+        for (int i = 0; i < n; ++i)
+        {
+            // Print details for each service found
+            Serial.print(i + 1);
+            Serial.print(": ");
+            Serial.print(MDNS.answerHostname(i));
+            Serial.print(" (");
+            Serial.print(MDNS.answerIP(i));
+            Serial.print(":");
+            Serial.print(MDNS.answerPort(i));
+            Serial.print(") TXT:");
+            //Serial.print(MDNS.answerTxts())
+
+            Serial.println();
+        }
+    }
+    return;
+}
+void FILAMENT_ESTIMATOR::updateServiceTxt()
+{
+
+    Serial.print(F("Update mDNS service txt: filament,"));
+    Serial.print((int16_t)filamentWeight);
+    Serial.println();
+
+    MDNS.addServiceTxt(spooderService, "filament", (int16_t)filamentWeight);
+    // 'announce' can be called every time, the configuration of some service
+    // changes. Mainly, this would be changed content of TXT items.
+    MDNS.announce();
+    return;
+}
+void FILAMENT_ESTIMATOR::printSpoodersDataset()
+{
+    outsidePrintSpoodersDataset();
+    return;
+}
+void FILAMENT_ESTIMATOR::checkGithubTag()
+{
+    if (numCerts == 0)
+    {
+        Serial.println(F("No CA certs found. Unable to establish https connection."));
+        return;
+    }
+    Serial.println(F("Checking Github latest version:"));
+    ESPOTAGitHub ESPOTAGitHub(&certStore, GHOTA_USER, GHOTA_REPO, GHOTA_CURRENT_TAG, GHOTA_BIN_FILE, GHOTA_ACCEPT_PRERELEASE);
+
+        if (ESPOTAGitHub.checkUpgrade())
+    {
+        Serial.print("Update found at: ");
+        Serial.println(ESPOTAGitHub.getUpgradeURL());
+    }
+    else
+    {
+        Serial.print("Error: ");
+        Serial.println(ESPOTAGitHub.getLastError());
+    }
+
+    return;
 }

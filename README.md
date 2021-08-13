@@ -60,6 +60,7 @@ board = nodemcuv2
 framework = arduino
 board_build.filesystem = littlefs
 board_build.ldscript = eagle.flash.4m1m.ld
+build_flags = -w
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
@@ -68,6 +69,7 @@ lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
 
+build_flags = -w prevents some compile warnings/errors.
 ---
 
 ### Upload the data folder to the file system
