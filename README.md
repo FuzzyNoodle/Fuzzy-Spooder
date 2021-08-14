@@ -68,7 +68,8 @@ lib_deps = georgychen/Fuzzy Spooder@^0.4.0
 
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
-build_flags = -w prevents some compile warnings/errors.
+
+```build_flags = -w``` prevents some compile warnings/errors.
 
 ---
 
