@@ -11,9 +11,9 @@
 
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
-#define CURRENT_VERSION_MINOR 7
-#define CURRENT_VERSION_PATCH 0
-#define CURRENT_VERSION "0.7.0"
+#define CURRENT_VERSION_MINOR 6
+#define CURRENT_VERSION_PATCH 3
+#define CURRENT_VERSION "0.6.3"
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
@@ -137,26 +137,8 @@
 #define MENU_LOW_FILAMENT_SETUP 4
 #define MENU_NOTIFICATION 5
 #define MENU_DEBUG 8
-#define DEBUG_LOAD_TO_SETTING 0
-#define DEBUG_SAVE_TO_EEPROM 1
-#define DEBUG_DUMP_SETTING 2
-#define DEBUG_DUMP_EEPROM 3
-#define DEBUG_ERASE_EEPROM 4
-#define DEBUG_LIST_DIRECTORY 5
-#define DEBUG_LOAD_CONFIG 6
-#define DEBUG_DUMP_CONFIG 7
-#define DEBUG_REBOOT 8
-#define DEBUG_BLYNK_NOTIFY 9
-#define DEBUG_START_LOGGING 10
-#define DEBUG_STOP_LOGGING 11
-#define DEBUG_RUN_LOG_TXT 12
-#define DEBUG_STOP_LOG_TXT 13
-#define DEBUG_TOGGLE_DETECTION_OUTPUT 14
-#define DEBUG_QUERY_MDNS 15
-#define DEBUG_UPDATE_SERVICE_TXT 16
-#define DEBUG_PRINT_SPOODERS_DATASET 17
-#define DEBUG_CHECK_GITHUB_TAG 18
-#define DEBUG_RETURN 19
+
+#define PAGE_DEBUG_SERVICES 80
 
 #define DECLARED_EEPROM_SIZE 1024
 #define EEPROM_START_ADDRESS 0
@@ -182,15 +164,22 @@
 // A single, global CertStore which can be used by all
 // connections.  Needs to stay live the entire time any of
 // the WiFiClientBearSSLs are present.
-#include <CertStoreBearSSL.h>
-#include <ESP_OTA_GitHub.h>
+//#include <CertStoreBearSSL.h>
+//#include <ESP_OTA_GitHub.h>
 /* Set up values for your repository and binary names */
+
 #define GHOTA_USER "FuzzyNoodle"
 #define GHOTA_REPO "Fuzzy-Spooder"
 #define GHOTA_CURRENT_TAG CURRENT_VERSION
 #define GHOTA_BIN_FILE "fuzzy_spooder.bin"
 #define GHOTA_ACCEPT_PRERELEASE 1
-
+/*
+#define GHOTA_USER "yknivag"
+#define GHOTA_REPO "ESP_OTA_GitHub_Showcase"
+#define GHOTA_CURRENT_TAG "0.0.0"
+#define GHOTA_BIN_FILE "ESP_OTA_GitHub_Showcase.ino.d1_mini.bin"
+#define GHOTA_ACCEPT_PRERELEASE 0
+*/
 class FILAMENT_ESTIMATOR
 {
 public:
@@ -242,6 +231,7 @@ public:
   void handleFileUpload(); //Handle a file upload request
   void handleNotFound();   //The "Not Found" handler
   void replyOK();
+  void checkGithubTag();
 
 private:
   ESP8266WebServer server;
@@ -273,15 +263,27 @@ private:
     uint8_t notifyOnFallOffRack;
     uint8_t notifyOnFallOffBearing;
     uint8_t notifyOnTangled;
+
+    uint8_t servicesMDNS;
+    uint8_t servicesBLYNK;
+    uint8_t servicesWebServer;
+    uint8_t servicesArduinoOTA;
+    uint8_t servicesReserved1;
   } setting;
 
   //wifi related
   bool enableWifi = false;
   uint8_t wifiStatus = WIFI_STATUS_BOOT;
+  bool ArduinoOTAConfigured = false;
+  bool serverConfigured = false;
   void updateWifi();
   void connectWifi();
   void beginServices();
   void beginmDNS();
+  void beginServer();
+  void beginArduinoOTA();
+  void beginBlynk();
+  bool blynkConnected = false;
 
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;
@@ -307,6 +309,9 @@ private:
   void drawTriangle(uint8_t x, uint8_t y);
   void tare();
   void calibrate();
+  uint32_t returnToHomepageTimer;
+  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 30000;
+  void checkCurrentPage();
 
   uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
 
@@ -361,10 +366,35 @@ private:
   uint32_t lowFilamentEditModerTimer;
   const uint32_t LOW_FILAMENT_EDIT_MODE_PERIOD = 500;
 
+  enum DEBUG_MENU
+  {
+    DEBUG_LOAD_TO_SETTING,
+    DEBUG_SAVE_TO_EEPROM,
+    DEBUG_DUMP_SETTING,
+    DEBUG_DUMP_EEPROM,
+    DEBUG_ERASE_EEPROM,
+    DEBUG_LIST_DIRECTORY,
+    DEBUG_LOAD_CONFIG,
+    DEBUG_DUMP_CONFIG,
+    DEBUG_REBOOT,
+    DEBUG_BLYNK_NOTIFY,
+    DEBUG_START_LOGGING,
+    DEBUG_STOP_LOGGING,
+    DEBUG_RUN_LOG_TXT,
+    DEBUG_STOP_LOG_TXT,
+    DEBUG_TOGGLE_DETECTION_OUTPUT,
+    DEBUG_QUERY_MDNS,
+    DEBUG_UPDATE_SERVICE_TXT,
+    DEBUG_PRINT_SPOODERS_DATASET,
+    DEBUG_CHECK_GITHUB_TAG,
+    DEBUG_PRINT_MEMORY,
+    DEBUG_SERVICES,
+    DEBUG_RETURN
+  };
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-#define NUMBER_OF_DEBUG_ITEMS 20
+#define NUMBER_OF_DEBUG_ITEMS 22
   uint8_t numberOfDebugMenuItems = NUMBER_OF_DEBUG_ITEMS;
   String debugMenuTitle[NUMBER_OF_DEBUG_ITEMS] = {
       "Load to Setting",
@@ -386,7 +416,33 @@ private:
       "Update Service Txt",
       "Print Spooders Dataset",
       "Check Github tag",
+      "Print Memory",
+      "Services",
       "<<-- Return to Menu "};
+  enum SERVICE_MENU
+  {
+    SERVICES_MENU_MDNS,
+    SERVICES_MENU_BLYNK,
+    SERVICES_MENU_WEB_SERVER,
+    SERVICES_MENU_ARDUINO_OTA,
+    SERVICES_MENU_RESERVED_1,
+    SERVICES_MENU_RETURN
+  };
+  String servicesMenuTitle[6] =
+      {
+          "mDNS",
+          "Blynk",
+          "Web server",
+          "Arduino OTA",
+          "Reserved_1",
+          "<<-- Return to Debug"};
+  uint8_t servicesMenuSelection = SERVICES_MENU_MDNS;
+  uint8_t servicesMenuItemStartIndex = 0;
+  uint8_t servicesMenuItemPerPage = 5;
+  uint8_t numberOfServicesMenuItems = 6;
+  bool getServicesSetting(uint8_t selection);
+  void setServicesSetting(uint8_t selection, bool value);
+
   void loadToSetting();
   void saveToEEPROM();
   void dumpSetting();
@@ -419,6 +475,7 @@ private:
   void loadConfig(); //load the config file into buffer
   void dumpConfig(); //Pring all the config.json content for debugging purpose
   StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDoc;
+  //DynamicJsonDocument jsonDoc;
   const char *config_version; // "0.3.0"
   const char *wifi_ssid;      // "your_ssid"
   const char *wifi_password;  // "your_password"
@@ -451,9 +508,6 @@ private:
   const uint32_t CHANGE_CONNECTION_SYMBOL_PERIOD = 1000;
   uint32_t checkConnectionDisplaySymbolTimer;
   void checkConnectionDisplaySymbol();
-
-  void beginBlynk();
-  bool blynkConnected = false;
 
   //file system manager, imported from https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser
   const char *fsName = "LittleFS";
@@ -564,11 +618,9 @@ private:
   MDNSResponder::hMDNSService spooderService = 0; // The handle of the spooder service in the MDNS responder
   void updateServiceTxt();
   void printSpoodersDataset();
-
-  //Github auto update
-  BearSSL::CertStore certStore;
-  uint16_t numCerts = 0; //number or certs read from file system
-  void checkGithubTag();
+  //void printMemory();
+  //BearSSL::CertStore certStore;
+  //uint16_t numCerts = 0; //number or certs read from file system
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

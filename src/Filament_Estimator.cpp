@@ -133,12 +133,67 @@ static void outsidePrintSpoodersDataset()
         }
     }
 }
+
+//BearSSL::CertStore certStore;
+//uint16_t numCerts = 0; //number or certs read from file system
+void printMemory(String s);
+void outsideCheckGithubTag(bool connectWiFi)
+{
+    /*
+    printMemory("Start of outsideCheckGithubTag()");
+
+    LittleFS.begin();
+    
+    if (connectWiFi == true)
+    {
+        if ((WiFi.status() != WL_CONNECTED))
+        {
+            WiFi.mode(WIFI_STA);
+            Serial.print("Connecting WiFi...");
+            WiFi.begin();
+            while ((WiFi.status() != WL_CONNECTED))
+            {
+                Serial.print(".");
+                delay(500);
+            }
+            Serial.println("Ok!");
+        }
+    }
+    if (numCerts == 0)
+    {
+        numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
+    }
+
+    // Serial.print(F("Number of CA certs read: "));
+    //Serial.println(numCerts);
+    if (numCerts == 0)
+    {
+        Serial.println(F("No CA certs found. Unable to establish https connection."));
+        return;
+    }
+    Serial.println(F("Checking Github latest version:"));
+    ESPOTAGitHub ESPOTAGitHub(&certStore, GHOTA_USER, GHOTA_REPO, GHOTA_CURRENT_TAG, GHOTA_BIN_FILE, GHOTA_ACCEPT_PRERELEASE);
+
+    if (ESPOTAGitHub.checkUpgrade())
+    {
+        Serial.print("Update found at: ");
+        Serial.println(ESPOTAGitHub.getUpgradeURL());
+    }
+    else
+    {
+        Serial.print("Error: ");
+        Serial.println(ESPOTAGitHub.getLastError());
+    }
+    printMemory("End of outsideCheckGithubTag()");
+    */
+    return;
+}
 FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
                                            button{BUTTON_PIN},
                                            rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, stepsPerClick},
                                            display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
                                            loadcell{HX711_DOUT_PIN, HX711_SCK_PIN}
-
+//jsonDoc{JSON_DOC_BUFFER_SIZE}
 {
 }
 void FILAMENT_ESTIMATOR::begin(void)
@@ -176,10 +231,11 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         Serial.println(F("LittleFS file system mounted."));
         //listDir("");
     }
-
+    /*
     numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
     Serial.print(F("Number of CA certs read: "));
     Serial.println(numCerts);
+    */
 
     displayMonoBitmap("/images/logo.bmp");
 
@@ -223,35 +279,64 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
     lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
+    //dumpSetting();
+
     //Initialize notification settings for the first time
-    if (setting.notifyOnPrintStarted != 0 || setting.notifyOnPrintStarted != 1)
+    if (setting.notifyOnPrintStarted != 0 && setting.notifyOnPrintStarted != 1)
     {
         setting.notifyOnPrintStarted = true;
         isDirty = true;
     }
-    if (setting.notifyOnPrintCompleted != 0 || setting.notifyOnPrintCompleted != 1)
+    if (setting.notifyOnPrintCompleted != 0 && setting.notifyOnPrintCompleted != 1)
     {
         setting.notifyOnPrintCompleted = true;
         isDirty = true;
     }
-    if (setting.notifyOnLowFilament != 0 || setting.notifyOnLowFilament != 1)
+    if (setting.notifyOnLowFilament != 0 && setting.notifyOnLowFilament != 1)
     {
         setting.notifyOnLowFilament = true;
         isDirty = true;
     }
-    if (setting.notifyOnFallOffRack != 0 || setting.notifyOnFallOffRack != 1)
+    if (setting.notifyOnFallOffRack != 0 && setting.notifyOnFallOffRack != 1)
     {
         setting.notifyOnFallOffRack = true;
         isDirty = true;
     }
-    if (setting.notifyOnFallOffBearing != 0 || setting.notifyOnFallOffBearing != 1)
+    if (setting.notifyOnFallOffBearing != 0 && setting.notifyOnFallOffBearing != 1)
     {
         setting.notifyOnFallOffBearing = true;
         isDirty = true;
     }
-    if (setting.notifyOnTangled != 0 || setting.notifyOnTangled != 1)
+    if (setting.notifyOnTangled != 0 && setting.notifyOnTangled != 1)
     {
         setting.notifyOnTangled = true;
+        isDirty = true;
+    }
+
+    //Initialize services settings for the first time
+    if (setting.servicesMDNS != 0 && setting.servicesMDNS != 1)
+    {
+        setting.servicesMDNS = true;
+        isDirty = true;
+    }
+    if (setting.servicesBLYNK != 0 && setting.servicesBLYNK != 1)
+    {
+        setting.servicesBLYNK = true;
+        isDirty = true;
+    }
+    if (setting.servicesWebServer != 0 && setting.servicesWebServer != 1)
+    {
+        setting.servicesWebServer = true;
+        isDirty = true;
+    }
+    if (setting.servicesArduinoOTA != 0 && setting.servicesArduinoOTA != 1)
+    {
+        setting.servicesArduinoOTA = true;
+        isDirty = true;
+    }
+    if (setting.servicesReserved1 != 0 && setting.servicesReserved1 != 1)
+    {
+        setting.servicesReserved1 = true;
         isDirty = true;
     }
 
@@ -297,6 +382,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     //load config file
     loadConfig();
+    //dumpConfig();
 
     Serial.print("Initializing Loadcell using ");
     Serial.println(setting.calValue);
@@ -381,7 +467,10 @@ void FILAMENT_ESTIMATOR::update(void)
         updateEmulation();
     }
     updateDetection();
+
+    checkCurrentPage();
 }
+
 void FILAMENT_ESTIMATOR::setWifi(bool wifi)
 {
     enableWifi = wifi;
@@ -416,7 +505,7 @@ void FILAMENT_ESTIMATOR::updateWifi()
                 displayPage(PAGE_INFO);
             }
             Serial.print("Hostname = ");
-            Serial.println(WiFi.getHostname());
+            Serial.println(WiFi.hostname());
             beginServices();
         }
         break;
@@ -425,13 +514,23 @@ void FILAMENT_ESTIMATOR::updateWifi()
     default:
         break;
     }
-    ArduinoOTA.handle();
-    server.handleClient();
+    if (ArduinoOTAConfigured == true)
+    {
+        ArduinoOTA.handle();
+    }
+    if (serverConfigured == true)
+    {
+        server.handleClient();
+    }
+
     if (MDNS.isRunning())
     {
         MDNS.update();
     }
-    Blynk.run();
+    if (blynkConnected == true)
+    {
+        Blynk.run();
+    }
 }
 void FILAMENT_ESTIMATOR::connectWifi()
 {
@@ -450,66 +549,19 @@ void FILAMENT_ESTIMATOR::connectWifi()
 void FILAMENT_ESTIMATOR::beginServices()
 {
 
+    //Serial.println("Check Gitgub at beginServices():");
+    //outsideCheckGithubTag(false);
+
     beginmDNS();
+
     beginBlynk();
 
-    // web server init for file system manger
-    // Filesystem status
-    server.on("/status", HTTP_GET, outsideHandleStatus);
+    beginServer();
 
-    // List directory
-    server.on("/list", HTTP_GET, outsideHandleFileList);
-
-    // Load editor
-    server.on("/edit", HTTP_GET, outsideHandleGetEdit);
-
-    // Create file
-    server.on("/edit", HTTP_PUT, outsideHandleFileCreate);
-
-    // Delete file
-    server.on("/edit", HTTP_DELETE, outsideHandleFileDelete);
-
-    // Upload file
-    // - first callback is called after the request has ended with all parsed arguments
-    // - second callback handles file upload at that location
-    server.on("/edit", HTTP_POST, outsideReplyOK, outsideHandleFileUpload);
-
-    // Default handler for all URIs not defined above
-    // Use it to read files from filesystem
-    server.onNotFound(outsideHandleNotFound);
-
-    // Start server
-    server.begin();
-
-    //Setup for OTA
-    ArduinoOTA.setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
-    ArduinoOTA.onStart([]()
-                       { Serial.println("Start"); });
-    ArduinoOTA.onEnd([]()
-                     { Serial.println("\nEnd"); });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
-                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
-    ArduinoOTA.onError([](ota_error_t error)
-                       {
-                           Serial.printf("Error[%u]: ", error);
-                           if (error == OTA_AUTH_ERROR)
-                               Serial.println("Auth Failed");
-                           else if (error == OTA_BEGIN_ERROR)
-                               Serial.println("Begin Failed");
-                           else if (error == OTA_CONNECT_ERROR)
-                               Serial.println("Connect Failed");
-                           else if (error == OTA_RECEIVE_ERROR)
-                               Serial.println("Receive Failed");
-                           else if (error == OTA_END_ERROR)
-                               Serial.println("End Failed");
-                       });
-    ArduinoOTA.begin();
-    Serial.print("ArduinoOTA hostname: ");
-    Serial.println(ArduinoOTA.getHostname());
-    Serial.println("ArduinoOTA setup ok.");
+    beginArduinoOTA();
 
     configTime(MYTZ, "pool.ntp.org");
-    Serial.println("NTP started.");
+    Serial.println(F("NTP started."));
 
     Serial.println(F("Services started."));
 }
@@ -550,9 +602,70 @@ void FILAMENT_ESTIMATOR::beginmDNS()
         Serial.println("Invalid spooder ID, mDNS not started.");
     }
 }
+void FILAMENT_ESTIMATOR::beginServer()
+{
+    // web server init for file system manger
+    // Filesystem status
+    server.on("/status", HTTP_GET, outsideHandleStatus);
+
+    // List directory
+    server.on("/list", HTTP_GET, outsideHandleFileList);
+
+    // Load editor
+    server.on("/edit", HTTP_GET, outsideHandleGetEdit);
+
+    // Create file
+    server.on("/edit", HTTP_PUT, outsideHandleFileCreate);
+
+    // Delete file
+    server.on("/edit", HTTP_DELETE, outsideHandleFileDelete);
+
+    // Upload file
+    // - first callback is called after the request has ended with all parsed arguments
+    // - second callback handles file upload at that location
+    server.on("/edit", HTTP_POST, outsideReplyOK, outsideHandleFileUpload);
+
+    // Default handler for all URIs not defined above
+    // Use it to read files from filesystem
+    server.onNotFound(outsideHandleNotFound);
+
+    // Start server
+    server.begin();
+    serverConfigured = true;
+}
+void FILAMENT_ESTIMATOR::beginArduinoOTA()
+{
+    //Setup for OTA
+    ArduinoOTA.setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
+    ArduinoOTA.onStart([]()
+                       { Serial.println("Start"); });
+    ArduinoOTA.onEnd([]()
+                     { Serial.println("\nEnd"); });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+    ArduinoOTA.onError([](ota_error_t error)
+                       {
+                           Serial.printf("Error[%u]: ", error);
+                           if (error == OTA_AUTH_ERROR)
+                               Serial.println("Auth Failed");
+                           else if (error == OTA_BEGIN_ERROR)
+                               Serial.println("Begin Failed");
+                           else if (error == OTA_CONNECT_ERROR)
+                               Serial.println("Connect Failed");
+                           else if (error == OTA_RECEIVE_ERROR)
+                               Serial.println("Receive Failed");
+                           else if (error == OTA_END_ERROR)
+                               Serial.println("End Failed");
+                       });
+    ArduinoOTA.begin();
+    ArduinoOTAConfigured = true;
+    Serial.print(F("ArduinoOTA hostname: "));
+    Serial.println(ArduinoOTA.getHostname());
+    Serial.println(F("ArduinoOTA setup ok."));
+}
 void FILAMENT_ESTIMATOR::beginBlynk()
 {
-    Serial.print("Connecting Blynk:");
+    Serial.print(F("Connecting Blynk:"));
     Serial.println(blynk_auth);
 
     Blynk.config(blynk_auth);
@@ -586,7 +699,7 @@ void FILAMENT_ESTIMATOR::checkConnectionStatus()
     {
         connectionStatus = CONNECTION_STATUS_WIFI_AND_INTERNET;
         //Todo: check internet connection
-        checkGithubTag();
+        //checkGithubTag();
         return;
     }
     else
@@ -898,6 +1011,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             break;
         case PAGE_NOTIFICATION:
+        {
             switch (notificationMenuSelection)
             {
             case NOTIFICATION_MENU_PRINT_STARTED:
@@ -916,7 +1030,8 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 setPage(PAGE_MENU);
                 break;
             }
-            break;
+            break; //case PAGE_NOTIFICATION:
+        }
         case PAGE_DEBUG:
             switch (debugMenuSelection)
             {
@@ -961,11 +1076,9 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case DEBUG_RUN_LOG_TXT:
                 startEmulation();
-
                 break;
             case DEBUG_STOP_LOG_TXT:
                 stopEmulation();
-
                 break;
             case DEBUG_TOGGLE_DETECTION_OUTPUT:
                 detectionDebugOutput = !detectionDebugOutput;
@@ -994,6 +1107,12 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case DEBUG_CHECK_GITHUB_TAG:
                 checkGithubTag();
                 break;
+            case DEBUG_PRINT_MEMORY:
+                printMemory("Debug print memory:");
+                break;
+            case DEBUG_SERVICES:
+                setPage(PAGE_DEBUG_SERVICES);
+                break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
                 debugMenuItemStartIndex = DEBUG_LOAD_TO_SETTING;
@@ -1001,8 +1120,29 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             }
             break;
+        case PAGE_DEBUG_SERVICES:
+        {
+            switch (servicesMenuSelection)
+            {
+            case SERVICES_MENU_MDNS:
+            case SERVICES_MENU_BLYNK:
+            case SERVICES_MENU_WEB_SERVER:
+            case SERVICES_MENU_ARDUINO_OTA:
+            case SERVICES_MENU_RESERVED_1:
+                //Toogle the selected settings
+                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
+                displayPage(PAGE_DEBUG_SERVICES);
+                break;
+            case SERVICES_MENU_RETURN:
+                servicesMenuSelection = SERVICES_MENU_MDNS;
+                servicesMenuItemStartIndex = SERVICES_MENU_MDNS;
+                setPage(PAGE_DEBUG);
+                break;
+            }
+            break; //case PAGE_DEBUG_SERVICES:
         }
-        break; //switch (currentPage)
+        }
+        break; //case SINGLE_CLICK:
     case DOUBLE_CLICK:
 
         break;
@@ -1016,6 +1156,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
         }
         break;
     }
+    returnToHomepageTimer = millis();
 }
 void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 {
@@ -1299,6 +1440,19 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 setPage(PAGE_DEBUG);
             }
 
+            break;
+        }
+        case PAGE_DEBUG_SERVICES:
+        {
+            if (servicesMenuSelection > SERVICES_MENU_MDNS)
+            {
+                servicesMenuSelection--;
+                if (servicesMenuSelection < servicesMenuItemStartIndex)
+                {
+                    servicesMenuItemStartIndex--;
+                }
+                setPage(PAGE_DEBUG_SERVICES);
+            }
             break;
         }
 
@@ -1595,6 +1749,19 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             }
             break;
         }
+        case PAGE_DEBUG_SERVICES:
+        {
+            if (servicesMenuSelection < (numberOfServicesMenuItems - 1))
+            {
+                servicesMenuSelection++;
+                if (servicesMenuSelection >= servicesMenuItemStartIndex + servicesMenuItemPerPage)
+                {
+                    servicesMenuItemStartIndex++;
+                }
+                setPage(PAGE_DEBUG_SERVICES);
+            }
+            break;
+        }
 
         } //switch (currentPage)
 
@@ -1602,6 +1769,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
     } //case RE_RIGHT:
 
     } //switch (direction)
+    returnToHomepageTimer = millis();
 }
 bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
@@ -2225,7 +2393,34 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawDisplay();
         break;
     }
+    case PAGE_DEBUG_SERVICES:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Services");
+        display.drawRect(0, 12, 128, 1);
 
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.drawString(6, 12, servicesMenuTitle[servicesMenuItemStartIndex]);
+        display.drawString(100, 12, (getServicesSetting(servicesMenuItemStartIndex) == true) ? "On" : "    Off");
+        display.drawString(6, 22, servicesMenuTitle[servicesMenuItemStartIndex + 1]);
+        display.drawString(100, 22, (getServicesSetting(servicesMenuItemStartIndex + 1) == true) ? "On" : "    Off");
+        display.drawString(6, 32, servicesMenuTitle[servicesMenuItemStartIndex + 2]);
+        display.drawString(100, 32, (getServicesSetting(servicesMenuItemStartIndex + 2) == true) ? "On" : "    Off");
+        display.drawString(6, 42, servicesMenuTitle[servicesMenuItemStartIndex + 3]);
+        display.drawString(100, 42, (getServicesSetting(servicesMenuItemStartIndex + 3) == true) ? "On" : "    Off");
+        display.drawString(6, 52, servicesMenuTitle[servicesMenuItemStartIndex + 4]);
+        if (servicesMenuItemStartIndex + 4 != SERVICES_MENU_RETURN)
+        {
+            display.drawString(100, 52, (getServicesSetting(servicesMenuItemStartIndex + 4) == true) ? "On" : "    Off");
+        }
+
+        drawLeftIndicator(servicesMenuSelection - servicesMenuItemStartIndex);
+        drawDisplay();
+        break;
+    }
     default:
         break;
     }
@@ -2389,6 +2584,22 @@ void FILAMENT_ESTIMATOR::updateHomepage()
     {
         displayPage(PAGE_HOME);
     }
+}
+void FILAMENT_ESTIMATOR::checkCurrentPage()
+{
+    if (millis() - returnToHomepageTimer < RETURN_TO_HOMEPAGE_PERIOD)
+        return;
+    if (currentPage == PAGE_HOME)
+        return;
+    if (calibrateEditDigitMode == true)
+        return;
+    if (lowFilamentEditDigitMode == true)
+        return;
+    if (spoolHolderEditDigitMode == true)
+        return;
+    if (setSpooderIDEditMode == true)
+        return;
+    setPage(PAGE_HOME);
 }
 void FILAMENT_ESTIMATOR::drawOverlay(const char *msgLine1, const char *msgLine2, uint16_t period)
 {
@@ -2619,6 +2830,17 @@ void FILAMENT_ESTIMATOR::dumpSetting()
 
     Serial.print(F("  - notifyOnTangled: "));
     Serial.println(setting.notifyOnTangled);
+
+    Serial.print(F("  - servicesMDNS: "));
+    Serial.println(setting.servicesMDNS);
+    Serial.print(F("  - servicesBLYNK: "));
+    Serial.println(setting.servicesBLYNK);
+    Serial.print(F("  - servicesWebServer: "));
+    Serial.println(setting.servicesWebServer);
+    Serial.print(F("  - servicesArduinoOTA: "));
+    Serial.println(setting.servicesArduinoOTA);
+    Serial.print(F("  - servicesReserved1: "));
+    Serial.println(setting.servicesReserved1);
 
     Serial.println(F("Setting dump completed."));
 }
@@ -3661,6 +3883,9 @@ void FILAMENT_ESTIMATOR::updateDetection()
     }
 
     previousTotalWeight = totalWeight;
+
+    //printMemory(); //debug oom
+
     detectionTimer = millis();
 }
 void FILAMENT_ESTIMATOR::pushWeight(float entry)
@@ -3967,8 +4192,47 @@ void FILAMENT_ESTIMATOR::printSpoodersDataset()
     outsidePrintSpoodersDataset();
     return;
 }
+void printMemory(String s)
+{
+    Serial.print(s);
+    Serial.print(F(" Heap: "));
+    Serial.print(ESP.getFreeHeap());
+    Serial.print(F("    Block: "));
+    Serial.println(ESP.getMaxFreeBlockSize());
+}
 void FILAMENT_ESTIMATOR::checkGithubTag()
 {
+    outsideCheckGithubTag(false);
+    return;
+    /*
+    if (LittleFS.begin())
+    {
+        Serial.println("LittleFS ok.");
+    }
+    else
+    {
+        Serial.println("LittleFS failed.");
+    }
+    Dir dir = LittleFS.openDir("/");
+    while (dir.next())
+    {
+        Serial.print(dir.fileName());
+        File f = dir.openFile("r");
+        Serial.println(f.size());
+    }
+
+    WiFi.mode(WIFI_STA);
+    Serial.print("Connecting WiFi...");
+    WiFi.begin();
+    if ((WiFi.status() != WL_CONNECTED))
+    {
+        Serial.print(".");
+    }
+    Serial.println("Ok!");
+
+    int numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
+    Serial.print(F("Number of CA certs read: "));
+    Serial.println(numCerts);
     if (numCerts == 0)
     {
         Serial.println(F("No CA certs found. Unable to establish https connection."));
@@ -3977,7 +4241,7 @@ void FILAMENT_ESTIMATOR::checkGithubTag()
     Serial.println(F("Checking Github latest version:"));
     ESPOTAGitHub ESPOTAGitHub(&certStore, GHOTA_USER, GHOTA_REPO, GHOTA_CURRENT_TAG, GHOTA_BIN_FILE, GHOTA_ACCEPT_PRERELEASE);
 
-        if (ESPOTAGitHub.checkUpgrade())
+    if (ESPOTAGitHub.checkUpgrade())
     {
         Serial.print("Update found at: ");
         Serial.println(ESPOTAGitHub.getUpgradeURL());
@@ -3989,4 +4253,54 @@ void FILAMENT_ESTIMATOR::checkGithubTag()
     }
 
     return;
+    */
+}
+bool FILAMENT_ESTIMATOR::getServicesSetting(uint8_t selection)
+{
+    bool result = false;
+    switch (selection)
+    {
+    case SERVICES_MENU_MDNS:
+        result = setting.servicesMDNS;
+        break;
+    case SERVICES_MENU_BLYNK:
+        result = setting.servicesBLYNK;
+        break;
+    case SERVICES_MENU_WEB_SERVER:
+        result = setting.servicesWebServer;
+        break;
+    case SERVICES_MENU_ARDUINO_OTA:
+        result = setting.servicesArduinoOTA;
+        break;
+    case SERVICES_MENU_RESERVED_1:
+        result = setting.servicesReserved1;
+        break;
+    default:
+        break;
+    }
+    return result;
+}
+void FILAMENT_ESTIMATOR::setServicesSetting(uint8_t selection, bool value)
+{
+    switch (selection)
+    {
+    case SERVICES_MENU_MDNS:
+        setting.servicesMDNS = value;
+        break;
+    case SERVICES_MENU_BLYNK:
+        setting.servicesBLYNK = value;
+        break;
+    case SERVICES_MENU_WEB_SERVER:
+        setting.servicesWebServer = value;
+        break;
+    case SERVICES_MENU_ARDUINO_OTA:
+        setting.servicesArduinoOTA = value;
+        break;
+    case SERVICES_MENU_RESERVED_1:
+        setting.servicesReserved1 = value;
+        break;
+    default:
+        break;
+    }
+    saveToEEPROM();
 }
