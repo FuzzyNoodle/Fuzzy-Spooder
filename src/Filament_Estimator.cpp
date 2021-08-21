@@ -1,101 +1,75 @@
 #include "Filament_Estimator.h"
 #include <ESP8266WiFi.h>
-
-#include <ArduinoOTA.h>
 #include <BlynkSimpleEsp8266.h>
 
 extern BlynkWifi Blynk;
 
-FILAMENT_ESTIMATOR *estimatorPointer;          //Declare a pointer to WEIGHT_ESTIMATOR
-static void outsideButtonHandler(Button2 &btn) // define global handler
+FILAMENT_ESTIMATOR *estimatorPointer;         //Declare a pointer to WEIGHT_ESTIMATOR
+static void globalButtonHandler(Button2 &btn) // define global handler
 {
     estimatorPointer->buttonHandler(btn); // calls class member handler
 }
-static void outsideRotaryHandler(ESPRotary &rty) // define global handler
+static void globalRotaryHandler(ESPRotary &rty) // define global handler
 {
     estimatorPointer->rotaryHandler(rty); // calls class member handler
 }
-static void outsideHandleStatus()
+static void globalHandleStatus()
 {
     estimatorPointer->handleStatus();
 }
-static void outsideHandleFileList()
+static void globalHandleFileList()
 {
     estimatorPointer->handleFileList();
 }
-static void outsideHandleGetEdit()
+static void globalHandleGetEdit()
 {
     estimatorPointer->handleGetEdit();
 }
-static void outsideHandleFileCreate()
+static void globalHandleFileCreate()
 {
     estimatorPointer->handleFileCreate();
 }
-static void outsideHandleFileDelete()
+static void globalHandleFileDelete()
 {
     estimatorPointer->handleFileDelete();
 }
-static void outsideHandleFileUpload()
+static void globalHandleFileUpload()
 {
     estimatorPointer->handleFileUpload();
 }
-static void outsideHandleNotFound()
+static void globalHandleNotFound()
 {
     estimatorPointer->handleNotFound();
 }
-static void outsideReplyOK()
+static void globalReplyOK()
 {
     estimatorPointer->replyOK();
 }
 
-MDNSResponder::hMDNSServiceQuery hMDNSServiceQuery = 0; // The handle of the 'http.tcp' service query in the MDNS responder
-static void outsideMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
+MDNSResponder::hMDNSServiceQuery hMDNSServiceQuery = 0; // The global handle of the 'http.tcp' service query in the MDNS responder
+void globalMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
-    String answerInfo;
-    answerInfo = String(serviceInfo.hostDomain()) + ": ";
-    switch (answerType)
-    {
-    case MDNSResponder::AnswerType::ServiceDomain:
-        answerInfo += "ServiceDomain " + String(serviceInfo.serviceDomain());
-        break;
-    case MDNSResponder::AnswerType::HostDomainAndPort:
-        answerInfo += "HostDomainAndPort " + String(serviceInfo.hostDomain()) + ":" + String(serviceInfo.hostPort());
-        break;
-    case MDNSResponder::AnswerType::IP4Address:
-        answerInfo += "IP4Address ";
-        for (IPAddress ip : serviceInfo.IP4Adresses())
-        {
-            answerInfo += "- " + ip.toString();
-        };
-        break;
-    case MDNSResponder::AnswerType::Txt:
-        answerInfo += "TXT " + String(serviceInfo.strKeyValue());
-        for (auto kv : serviceInfo.keyValues())
-        {
-            answerInfo += "\nkv : " + String(kv.first) + " : " + String(kv.second);
-        }
-        break;
-    default:
-        answerInfo = "Unknown Answertype";
-    }
-    Serial.printf("Answer %s %s\n", answerInfo.c_str(), p_bSetContent ? "Modified" : "Deleted");
+    //pass information the the inside-class method
+    estimatorPointer->MDNSServiceQueryCallback(serviceInfo, answerType, p_bSetContent);
 }
-static void outsideInstallDynamicServiceQuery()
+/*
+static void globalInstallDynamicServiceQuery()
 {
     if (!hMDNSServiceQuery)
     {
-        hMDNSServiceQuery = MDNS.installServiceQuery("spooder", "tcp", outsideMDNSServiceQueryCallback);
+        hMDNSServiceQuery = MDNS.installServiceQuery("spooder", "tcp", globalMDNSServiceQueryCallback);
         if (hMDNSServiceQuery)
         {
-            Serial.printf("Service query for 'spooder.tcp' services installed.\n");
+            Serial.println(F("Dynamic service query: 'spooder.tcp' install succeeded."));
         }
         else
         {
-            Serial.printf("FAILED to install service query for 'spooder.tcp' services!\n");
+            Serial.println(F("Dynamic service query: 'spooder.tcp' install failed."));
         }
     }
 }
-static void outsidePrintSpoodersDataset()
+*/
+static void globalPrintSpoodersDataset()
 {
     uint16_t count = 0;
     Serial.print(F("Local spooder services found: "));
@@ -136,11 +110,11 @@ static void outsidePrintSpoodersDataset()
 
 //BearSSL::CertStore certStore;
 //uint16_t numCerts = 0; //number or certs read from file system
-void printMemory(String s);
-void outsideCheckGithubTag(bool connectWiFi)
+void globalPrintMemory(String s);
+void globalCheckGithubTag(bool connectWiFi)
 {
     /*
-    printMemory("Start of outsideCheckGithubTag()");
+    globalPrintMemory("Start of globalCheckGithubTag()");
 
     LittleFS.begin();
     
@@ -184,16 +158,24 @@ void outsideCheckGithubTag(bool connectWiFi)
         Serial.print("Error: ");
         Serial.println(ESPOTAGitHub.getLastError());
     }
-    printMemory("End of outsideCheckGithubTag()");
+    globalPrintMemory("End of globalCheckGithubTag()");
     */
     return;
 }
-FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : server{80},
-                                           button{BUTTON_PIN},
+void globalPrintMemory(String s)
+{
+    Serial.print(s);
+    Serial.print(F(" Heap: "));
+    Serial.print(ESP.getFreeHeap());
+    Serial.print(F("    Block: "));
+    Serial.println(ESP.getMaxFreeBlockSize());
+}
+
+FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : button{BUTTON_PIN},
                                            rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, stepsPerClick},
                                            display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
                                            loadcell{HX711_DOUT_PIN, HX711_SCK_PIN}
-//jsonDoc{JSON_DOC_BUFFER_SIZE}
+
 {
 }
 void FILAMENT_ESTIMATOR::begin(void)
@@ -202,13 +184,20 @@ void FILAMENT_ESTIMATOR::begin(void)
 }
 void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token)
 {
-    Serial.println("");
+    Serial.println();
     //Firmware version setup
     currentVersion.major = CURRENT_VERSION_MAJOR;
     currentVersion.minor = CURRENT_VERSION_MINOR;
     currentVersion.patch = CURRENT_VERSION_PATCH;
 
     Serial.println("Program started.");
+    Serial.print(F("Firmware version "));
+    Serial.print(currentVersion.major);
+    Serial.print(F("."));
+    Serial.print(currentVersion.minor);
+    Serial.print(F("."));
+    Serial.print(currentVersion.patch);
+    Serial.println();
 
     //Setup for OLED
     display.init();
@@ -241,12 +230,12 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     //Setup for rotary switch
     estimatorPointer = this;
-    button.setClickHandler(outsideButtonHandler);
-    button.setLongClickHandler(outsideButtonHandler);
-    button.setDoubleClickHandler(outsideButtonHandler);
-    button.setTripleClickHandler(outsideButtonHandler);
-    rotary.setLeftRotationHandler(outsideRotaryHandler);
-    rotary.setRightRotationHandler(outsideRotaryHandler);
+    button.setClickHandler(globalButtonHandler);
+    button.setLongClickHandler(globalButtonHandler);
+    button.setDoubleClickHandler(globalButtonHandler);
+    button.setTripleClickHandler(globalButtonHandler);
+    rotary.setLeftRotationHandler(globalRotaryHandler);
+    rotary.setRightRotationHandler(globalRotaryHandler);
     Serial.println(F("Rotary Switch setup ok."));
 
     //Setup for settings and eeprom
@@ -314,6 +303,11 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     }
 
     //Initialize services settings for the first time
+    if (setting.servicesWiFi != 0 && setting.servicesWiFi != 1)
+    {
+        setting.servicesWiFi = true;
+        isDirty = true;
+    }
     if (setting.servicesMDNS != 0 && setting.servicesMDNS != 1)
     {
         setting.servicesMDNS = true;
@@ -332,11 +326,6 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     if (setting.servicesArduinoOTA != 0 && setting.servicesArduinoOTA != 1)
     {
         setting.servicesArduinoOTA = true;
-        isDirty = true;
-    }
-    if (setting.servicesReserved1 != 0 && setting.servicesReserved1 != 1)
-    {
-        setting.servicesReserved1 = true;
         isDirty = true;
     }
 
@@ -391,11 +380,20 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     loadcell.start(stabilizingTime, true);
     loadcell.setCalFactor(setting.calValue);
     tare();
+
+    //WiFi related
+    //Disable esp8266 wifi auto connection. Connection behavior is controlled by code and user.
+    WiFi.setAutoConnect(false);
+    WiFi.setAutoReconnect(false);
+
     Serial.println("Setup completed.");
 
     printingStatus = STATUS_BOOT;
     printingStatusString = "STATUS_BOOT";
     setPage(PAGE_HOME);
+
+    //Enable WiFi according to user setting
+    setWifi(setting.servicesWiFi);
 }
 void FILAMENT_ESTIMATOR::update(void)
 {
@@ -470,67 +468,108 @@ void FILAMENT_ESTIMATOR::update(void)
 
     checkCurrentPage();
 }
-
-void FILAMENT_ESTIMATOR::setWifi(bool wifi)
+void FILAMENT_ESTIMATOR::setWifi(bool value)
 {
-    enableWifi = wifi;
-    if (enableWifi == true)
+    if (value == true)
     {
-        Serial.println(F("Wifi enabled."));
-        if (wifiStatus == WIFI_STATUS_BOOT)
+        if (enableWifi == false)
         {
+            enableWifi = true;
+            Serial.println(F("Wifi enabled."));
+            WiFi.setAutoReconnect(true);
             wifiStatus = WIFI_STATUS_CONNECTING;
             connectWifi();
         }
     }
-    else //(enableWifi == false)
+    else
     {
-        Serial.println(F("Wifi disabled."));
+        if (enableWifi == true)
+        {
+            enableWifi = false;
+            Serial.println(F("Wifi disabled."));
+            WiFi.disconnect();
+            WiFi.setAutoReconnect(false);
+            wifiStatus = WIFI_STATUS_DISABLED;
+            displayPage(currentPage); //Refresh page for WIFI symbol change
+        }
     }
+    globalPrintMemory("setWifi: ");
 }
 void FILAMENT_ESTIMATOR::updateWifi()
 {
     switch (wifiStatus)
     {
     case WIFI_STATUS_CONNECTING:
+    {
         if (WiFi.status() == WL_CONNECTED)
         {
             wifiStatus = WIFI_STATUS_CONNECTED;
             Serial.println(F("Wifi connected."));
             Serial.print("IP Address = ");
             Serial.println(WiFi.localIP().toString());
-            if (currentPage == PAGE_INFO)
-            {
-                //update the wifi/ip info
-                displayPage(PAGE_INFO);
-            }
             Serial.print("Hostname = ");
             Serial.println(WiFi.hostname());
+            displayPage(currentPage); //Refresh page for WIFI symbol change
             beginServices();
         }
         break;
+    }
     case WIFI_STATUS_CONNECTED:
+    {
+        if (MDNS.isRunning())
+        {
+            MDNS.update();
+        }
+        if (enableBlynk == true)
+        {
+            Blynk.run();
+        }
+        if (enableWebServer == true)
+        {
+            webServer->handleClient();
+        }
+        if (enableArduinoOTA == true)
+        {
+            ArduinoOTA->handle();
+        }
+        if (enableNetworkTime == true)
+        {
+            updateNetworkTime();
+        }
+
         break;
+    }
+
     default:
         break;
     }
-    if (ArduinoOTAConfigured == true)
+}
+void FILAMENT_ESTIMATOR::updateNetworkTime()
+{
+
+    if (millis() - updateNetworkTimeTimer < UPDATE_NETWORK_TIME_PERIOD)
     {
-        ArduinoOTA.handle();
-    }
-    if (serverConfigured == true)
-    {
-        server.handleClient();
+        return;
     }
 
-    if (MDNS.isRunning())
+    //Check if the network time has been received, using year>2000
+    time_t now = time(nullptr);
+    tm *tmp = localtime(&now);
+
+    if (netWorkTimeReceived == false)
     {
-        MDNS.update();
+        if (tmp->tm_year > 100)
+        {
+            netWorkTimeReceived = true;
+            Serial.print(F("Network time received: "));
+            Serial.print(ctime(&now)); //ctime includes "\n"
+        }
     }
-    if (blynkConnected == true)
+    else //netWorkTimeReceived == false
     {
-        Blynk.run();
     }
+
+    updateNetworkTimeTimer = millis();
 }
 void FILAMENT_ESTIMATOR::connectWifi()
 {
@@ -548,143 +587,346 @@ void FILAMENT_ESTIMATOR::connectWifi()
 }
 void FILAMENT_ESTIMATOR::beginServices()
 {
-
     //Serial.println("Check Gitgub at beginServices():");
-    //outsideCheckGithubTag(false);
+    //globalCheckGithubTag(false);
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("WiFi not connected."));
+        return;
+    }
+    if (setting.servicesMDNS == true)
+    {
+        setMDNS(true);
+    }
+    if (setting.servicesBLYNK == true)
+    {
+        setBlynk(true);
+    }
+    if (setting.servicesWebServer == true)
+    {
+        setWebServer(true);
+    }
+    if (setting.servicesArduinoOTA == true)
+    {
+        setArduinoOTA(true);
+    }
 
-    beginmDNS();
+    //beginArduinoOTA();
+    if (enableNetworkTime == true)
+    {
+        configTime(TZ_Etc_GMT, "pool.ntp.org");
+    }
 
-    beginBlynk();
-
-    beginServer();
-
-    beginArduinoOTA();
-
-    configTime(MYTZ, "pool.ntp.org");
-    Serial.println(F("NTP started."));
+    //Serial.println(F("NTP started."));
 
     Serial.println(F("Services started."));
 }
-void FILAMENT_ESTIMATOR::beginmDNS()
+void FILAMENT_ESTIMATOR::setMDNS(bool value)
 {
-    if (MDNS.isRunning())
+    if (value == true) //turn on mDNS
     {
-        Serial.println(F("mDNS already running."));
-
-        if (MDNS.setHostname(hostname) == true)
+        if (WiFi.status() != WL_CONNECTED)
         {
-            Serial.print(F("Hostname changed to: "));
-            Serial.println(hostname);
+            Serial.println(F("Failed. WiFi not connected."));
+        }
+        else //Wifi is connected
+        {
+            if (MDNS.isRunning())
+            {
+                Serial.println(F("mDNS already running."));
+                if (MDNS.setHostname(hostname) == true)
+                {
+                    Serial.print(F("Hostname changed to: "));
+                    Serial.println(hostname);
+                }
+            }
+            else //MDNS is not running
+            {
+                if (validSpooderID == true)
+                {
+                    Serial.print(F("Starting mDNS as: "));
+                    Serial.print(hostname);
+                    if (MDNS.begin(hostname) == true)
+                    {
+                        Serial.println(F(" succeeded."));
+                        //add service announcements
+                        MDNS.addService(0, "http", "tcp", 80);                     //for web access
+                        spooderService = MDNS.addService(0, "spooder", "tcp", 80); //for inter-device data exchange, using websocket
+                        installDynamicServiceQuery();
+                    }
+                    else
+                    {
+                        Serial.println(" failed.");
+                    }
+                }
+                else //no valid spooder ID
+                {
+                    Serial.println("Invalid spooder ID, mDNS not started.");
+                }
+            } //MDNS is not running
         }
 
-        return;
-    }
-    if (validSpooderID == true)
+    }    //turn on mDNS
+    else //turn off mDNS
     {
-        Serial.print(F("Starting mDNS as: "));
-        Serial.print(hostname);
-        if (MDNS.begin(hostname) == true)
+        if (MDNS.isRunning())
         {
-            Serial.println(F(" succeeded."));
-
-            //add service announcements
-            MDNS.addService(0, "http", "tcp", 80);                     //for web access
-            spooderService = MDNS.addService(0, "spooder", "tcp", 80); //for inter-device data exchange, using websocket
-            outsideInstallDynamicServiceQuery();
+            hMDNSServiceQuery = 0;
+            MDNS.close();
+            Serial.println(F("mDNS stopped."));
+        }
+        else //MDNS is not running
+        {
+            Serial.println(F("mDNS not started."));
+        }
+    } //turn off mDNS
+    globalPrintMemory("setMDNS: ");
+    return;
+}
+void FILAMENT_ESTIMATOR::installDynamicServiceQuery()
+{
+    if (!hMDNSServiceQuery)
+    {
+        hMDNSServiceQuery = MDNS.installServiceQuery("spooder", "tcp", globalMDNSServiceQueryCallback);
+        if (hMDNSServiceQuery)
+        {
+            Serial.println(F("Dynamic service query: 'spooder.tcp' install succeeded."));
         }
         else
         {
-            Serial.println(" failed.");
+            Serial.println(F("Dynamic service query: 'spooder.tcp' install failed."));
         }
     }
-    else
-    {
-        Serial.println("Invalid spooder ID, mDNS not started.");
-    }
 }
-void FILAMENT_ESTIMATOR::beginServer()
+void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
-    // web server init for file system manger
-    // Filesystem status
-    server.on("/status", HTTP_GET, outsideHandleStatus);
-
-    // List directory
-    server.on("/list", HTTP_GET, outsideHandleFileList);
-
-    // Load editor
-    server.on("/edit", HTTP_GET, outsideHandleGetEdit);
-
-    // Create file
-    server.on("/edit", HTTP_PUT, outsideHandleFileCreate);
-
-    // Delete file
-    server.on("/edit", HTTP_DELETE, outsideHandleFileDelete);
-
-    // Upload file
-    // - first callback is called after the request has ended with all parsed arguments
-    // - second callback handles file upload at that location
-    server.on("/edit", HTTP_POST, outsideReplyOK, outsideHandleFileUpload);
-
-    // Default handler for all URIs not defined above
-    // Use it to read files from filesystem
-    server.onNotFound(outsideHandleNotFound);
-
-    // Start server
-    server.begin();
-    serverConfigured = true;
-}
-void FILAMENT_ESTIMATOR::beginArduinoOTA()
-{
-    //Setup for OTA
-    ArduinoOTA.setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
-    ArduinoOTA.onStart([]()
-                       { Serial.println("Start"); });
-    ArduinoOTA.onEnd([]()
-                     { Serial.println("\nEnd"); });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
-                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
-    ArduinoOTA.onError([](ota_error_t error)
-                       {
-                           Serial.printf("Error[%u]: ", error);
-                           if (error == OTA_AUTH_ERROR)
-                               Serial.println("Auth Failed");
-                           else if (error == OTA_BEGIN_ERROR)
-                               Serial.println("Begin Failed");
-                           else if (error == OTA_CONNECT_ERROR)
-                               Serial.println("Connect Failed");
-                           else if (error == OTA_RECEIVE_ERROR)
-                               Serial.println("Receive Failed");
-                           else if (error == OTA_END_ERROR)
-                               Serial.println("End Failed");
-                       });
-    ArduinoOTA.begin();
-    ArduinoOTAConfigured = true;
-    Serial.print(F("ArduinoOTA hostname: "));
-    Serial.println(ArduinoOTA.getHostname());
-    Serial.println(F("ArduinoOTA setup ok."));
-}
-void FILAMENT_ESTIMATOR::beginBlynk()
-{
-    Serial.print(F("Connecting Blynk:"));
-    Serial.println(blynk_auth);
-
-    Blynk.config(blynk_auth);
-    Blynk.connect(3000);
-
-    if (Blynk.connected() == true)
+    String answerInfo;
+    answerInfo = String(serviceInfo.hostDomain()) + ": ";
+    switch (answerType)
     {
-        blynkConnected = true;
-        Serial.println(F("Blynk connected."));
-    }
-    else
-    {
-        blynkConnected = false;
-        Serial.println(F("Blynk not connected."));
-        if (Blynk.isTokenInvalid() == true)
+    case MDNSResponder::AnswerType::ServiceDomain:
+        answerInfo += "ServiceDomain " + String(serviceInfo.serviceDomain());
+        break;
+    case MDNSResponder::AnswerType::HostDomainAndPort:
+        answerInfo += "HostDomainAndPort " + String(serviceInfo.hostDomain()) + ":" + String(serviceInfo.hostPort());
+        break;
+    case MDNSResponder::AnswerType::IP4Address:
+        answerInfo += "IP4Address ";
+        for (IPAddress ip : serviceInfo.IP4Adresses())
         {
-            Serial.println(F("Blynk token is invalid."));
+            answerInfo += "- " + ip.toString();
+        };
+        break;
+    case MDNSResponder::AnswerType::Txt:
+        answerInfo += "TXT " + String(serviceInfo.strKeyValue());
+        for (auto kv : serviceInfo.keyValues())
+        {
+            answerInfo += "\nkv : " + String(kv.first) + " : " + String(kv.second);
+        }
+        break;
+    default:
+        answerInfo = "Unknown Answertype";
+    }
+    Serial.printf("Answer %s %s\n", answerInfo.c_str(), p_bSetContent ? "Modified" : "Deleted");
+}
+void FILAMENT_ESTIMATOR::setBlynk(bool value)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("Failed. WiFi not connected."));
+        return;
+    }
+    if (value == true) //turn on blynk
+    {
+        enableBlynk = true;
+        if (Blynk.connected() == true)
+        {
+            Serial.print(F("Blynk already connected."));
+        }
+        else //Blynk not connected yet
+        {
+            Serial.print(F("Connecting Blynk using:"));
+            Serial.println(blynk_auth);
+
+            //Not using Blynk.begin(), because it
+            //1.Connection to the network (WiFi, Ethernet, …)
+            //2.Call of Blynk.config(...) to set Auth Token, Server Address, etc.
+            //3.Attempts to connect to the server once (can block for more than 30s)
+            //WiFi is controlled by code/user
+
+            Blynk.config(blynk_auth);
+            Blynk.connect(3000);
+
+            if (Blynk.connected() == true)
+            {
+                Serial.println(F("Blynk connected."));
+            }
+            else
+            {
+                Serial.println(F("Blynk not connected."));
+                if (Blynk.isTokenInvalid() == true)
+                {
+                    Serial.println(F("Blynk token is invalid."));
+                }
+            }
         }
     }
+    else //turn off blynk
+    {
+        enableBlynk = false;
+        if (Blynk.CONNECTED == true)
+        {
+            Blynk.disconnect();
+            Serial.println(F("Blynk disonnected."));
+        }
+        else //Blynk not connected yet
+        {
+            Serial.print(F("Blynk not connected."));
+        }
+    }
+    displayPage(currentPage); //Refresh page for blynk symbol change
+    globalPrintMemory("setBlynk: ");
+}
+void FILAMENT_ESTIMATOR::setWebServer(bool value)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("Failed. WiFi not connected."));
+        return;
+    }
+    if (value == true) //turn on web server
+    {
+        if (enableWebServer == true) //already enabled
+        {
+            Serial.println(F("Web Server already enabled."));
+        }
+        else //enable simple web server for file management
+        {
+            webServer = new ESP8266WebServer(80);
+
+            // web server init for file system manger
+            // Filesystem status
+            webServer->on("/status", HTTP_GET, globalHandleStatus);
+
+            // List directory
+            webServer->on("/list", HTTP_GET, globalHandleFileList);
+
+            // Load editor
+            webServer->on("/edit", HTTP_GET, globalHandleGetEdit);
+
+            // Create file
+            webServer->on("/edit", HTTP_PUT, globalHandleFileCreate);
+
+            // Delete file
+            webServer->on("/edit", HTTP_DELETE, globalHandleFileDelete);
+
+            // Upload file
+            // - first callback is called after the request has ended with all parsed arguments
+            // - second callback handles file upload at that location
+            webServer->on("/edit", HTTP_POST, globalReplyOK, globalHandleFileUpload);
+
+            // Default handler for all URIs not defined above
+            // Use it to read files from filesystem
+            webServer->onNotFound(globalHandleNotFound);
+
+            // Start server
+            webServer->begin();
+            enableWebServer = true;
+            Serial.print(F("Web Server enabled at:  "));
+            Serial.print(WiFi.localIP().toString());
+            if (MDNS.isRunning() == true)
+            {
+                Serial.print(F("  or  "));
+                Serial.print(hostname);
+                Serial.print(F(".local"));
+            }
+            Serial.println();
+        }
+    }    //turn on web server
+    else //trun off web server
+    {
+        if (enableWebServer == true) //disable web server
+        {
+            webServer->close();
+            delete webServer;
+            enableWebServer = false;
+            Serial.println(F("Web Server disabled."));
+        }
+        else //not enabled
+        {
+            Serial.println(F("Web Server already disabled."));
+        }
+    } //trun off web server
+    globalPrintMemory("setServer: ");
+    return;
+}
+void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("WiFi not connected."));
+        if (MDNS.isRunning() == false)
+        {
+            Serial.println(F("mDNS not running."));
+        }
+        return; //conditions not met
+    }           //(WiFi.status() != WL_CONNECTED)
+    else        //WiFi connected and mDNS running:
+    {
+        if (value == true) //enable arduino OTA
+        {
+            if (enableArduinoOTA == true) //already enabled
+            {
+                Serial.println(F("Arduino OTA already enabled."));
+            }
+            else //enable arduino OTA
+            {
+                ArduinoOTA = new ArduinoOTAClass;
+                //Setup for OTA
+                ArduinoOTA->setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
+                ArduinoOTA->onStart([]()
+                                    { Serial.println("Start"); });
+                ArduinoOTA->onEnd([]()
+                                  { Serial.println("\nEnd"); });
+                ArduinoOTA->onProgress([](unsigned int progress, unsigned int total)
+                                       { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+                ArduinoOTA->onError([](ota_error_t error)
+                                    {
+                                        Serial.printf("Error[%u]: ", error);
+                                        if (error == OTA_AUTH_ERROR)
+                                            Serial.println("Auth Failed");
+                                        else if (error == OTA_BEGIN_ERROR)
+                                            Serial.println("Begin Failed");
+                                        else if (error == OTA_CONNECT_ERROR)
+                                            Serial.println("Connect Failed");
+                                        else if (error == OTA_RECEIVE_ERROR)
+                                            Serial.println("Receive Failed");
+                                        else if (error == OTA_END_ERROR)
+                                            Serial.println("End Failed");
+                                    });
+                ArduinoOTA->begin();
+                enableArduinoOTA = true;
+
+                Serial.print(F("ArduinoOTA hostname: "));
+                Serial.println(ArduinoOTA->getHostname());
+                Serial.println(F("Arduino OTA enabled."));
+            }
+        }    //(value == true) //enable arduino OTA
+        else //(value == false) disable arduino OTA
+        {
+            if (enableArduinoOTA == true) //disable arduino OTA
+            {
+                delete ArduinoOTA;
+                enableArduinoOTA = false;
+                Serial.println(F("Arduino OTA disabled."));
+            }
+            else //not enabled
+            {
+                Serial.println(F("Arduino OTA already disabled."));
+            }
+        } //(value == false) disable arduino OTA
+    }     //WiFi connected and mDNS running:
+    globalPrintMemory("setArduinoOTA: ");
 }
 void FILAMENT_ESTIMATOR::checkConnectionStatus()
 {
@@ -920,7 +1162,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                         hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
                         Serial.print("Reset hostname to: ");
                         Serial.println(hostname);
-                        beginmDNS();
+                        setMDNS(setting.servicesMDNS); //change hostname if mDNS is enabled
                     }
                 }
 
@@ -1093,22 +1335,22 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 }
                 break;
             case DEBUG_QUERY_MDNS:
-                drawOverlay("Query", "mDNS", 1000);
+                //drawOverlay("Query", "mDNS", 1000);
                 queryMDNS();
                 break;
             case DEBUG_UPDATE_SERVICE_TXT:
-                drawOverlay("Update", "Srvc Txt", 1000);
+                //drawOverlay("Update", "Srvc Txt", 1000);
                 updateServiceTxt();
                 break;
             case DEBUG_PRINT_SPOODERS_DATASET:
-                drawOverlay("Print", "Spooders", 1000);
+                //drawOverlay("Print", "Spooders", 1000);
                 printSpoodersDataset();
                 break;
             case DEBUG_CHECK_GITHUB_TAG:
                 checkGithubTag();
                 break;
             case DEBUG_PRINT_MEMORY:
-                printMemory("Debug print memory:");
+                globalPrintMemory("Debug print memory:");
                 break;
             case DEBUG_SERVICES:
                 setPage(PAGE_DEBUG_SERVICES);
@@ -1124,18 +1366,49 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
         {
             switch (servicesMenuSelection)
             {
+            case SERVICES_MENU_WIFI:
+            {
+                //Toogle the selected settings
+                setServicesSetting(SERVICES_MENU_WIFI, !getServicesSetting(SERVICES_MENU_WIFI));
+                displayPage(PAGE_DEBUG_SERVICES);
+                setWifi(getServicesSetting(SERVICES_MENU_WIFI)); //turn WiFi on or off
+                break;
+            }
             case SERVICES_MENU_MDNS:
-            case SERVICES_MENU_BLYNK:
-            case SERVICES_MENU_WEB_SERVER:
-            case SERVICES_MENU_ARDUINO_OTA:
-            case SERVICES_MENU_RESERVED_1:
+            {
                 //Toogle the selected settings
                 setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
                 displayPage(PAGE_DEBUG_SERVICES);
+                setMDNS(getServicesSetting(SERVICES_MENU_MDNS)); //turn mDNS on or off
                 break;
+            }
+            case SERVICES_MENU_BLYNK:
+            {
+                //Toogle the selected settings
+                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
+                displayPage(PAGE_DEBUG_SERVICES);
+                setBlynk(getServicesSetting(SERVICES_MENU_BLYNK)); //turn blynk on or off
+                break;
+            }
+            case SERVICES_MENU_WEB_SERVER:
+            {
+                //Toogle the selected settings
+                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
+                displayPage(PAGE_DEBUG_SERVICES);
+                setWebServer(getServicesSetting(SERVICES_MENU_WEB_SERVER)); //turn web server on or off
+                break;
+            }
+            case SERVICES_MENU_ARDUINO_OTA:
+            { //Toogle the selected settings
+                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
+                setArduinoOTA(getServicesSetting(SERVICES_MENU_ARDUINO_OTA)); //turn arduino OTA on or off
+                displayPage(PAGE_DEBUG_SERVICES);
+                break;
+            }
+
             case SERVICES_MENU_RETURN:
-                servicesMenuSelection = SERVICES_MENU_MDNS;
-                servicesMenuItemStartIndex = SERVICES_MENU_MDNS;
+                servicesMenuSelection = SERVICES_MENU_WIFI;
+                servicesMenuItemStartIndex = SERVICES_MENU_WIFI;
                 setPage(PAGE_DEBUG);
                 break;
             }
@@ -1444,7 +1717,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
         }
         case PAGE_DEBUG_SERVICES:
         {
-            if (servicesMenuSelection > SERVICES_MENU_MDNS)
+            if (servicesMenuSelection > SERVICES_MENU_WIFI)
             {
                 servicesMenuSelection--;
                 if (servicesMenuSelection < servicesMenuItemStartIndex)
@@ -1896,7 +2169,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         }
 
-        drawSymbols();
+        //drawSymbols();
 
         drawDisplay();
     }
@@ -1913,9 +2186,13 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         String f = String(setting.version.major) + "." + String(setting.version.minor) + "." + String(setting.version.patch);
         display.drawString(6, 22, "Firmware: " + f);
         display.drawString(6, 32, "CAL Value: " + String(setting.calValue));
-        display.drawString(6, 42, "Wifi: " + WiFi.SSID());
-        display.drawString(6, 52, "IP:" + WiFi.localIP().toString());
-        drawSymbols();
+        if (enableWifi == true)
+        {
+            display.drawString(6, 42, "Wifi: " + WiFi.SSID());
+            display.drawString(6, 52, "IP:" + WiFi.localIP().toString());
+        }
+
+        //drawSymbols();
         drawRightIndicator(1);
         drawDisplay();
     }
@@ -1939,7 +2216,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawLeftIndicator(menuIndex - menuItemStartIndex);
 
-        drawSymbols();
+        //drawSymbols();
 
         drawDisplay();
 
@@ -2481,7 +2758,7 @@ void FILAMENT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
 }
 void FILAMENT_ESTIMATOR::drawSymbols()
 {
-    //wifi and interent connection symbol
+    //Draw WiFi and Blynk symbols
     uint8_t x = 117;
     uint8_t y = 0;
     switch (symbolType)
@@ -2637,6 +2914,7 @@ void FILAMENT_ESTIMATOR::updateOverlay()
 void FILAMENT_ESTIMATOR::drawDisplay()
 {
     updateOverlay();
+    drawSymbols();
     display.display();
 }
 void FILAMENT_ESTIMATOR::checkCalibrateEditModeTimer()
@@ -2830,7 +3108,8 @@ void FILAMENT_ESTIMATOR::dumpSetting()
 
     Serial.print(F("  - notifyOnTangled: "));
     Serial.println(setting.notifyOnTangled);
-
+    Serial.print(F("  - servicesWiFi: "));
+    Serial.println(setting.servicesWiFi);
     Serial.print(F("  - servicesMDNS: "));
     Serial.println(setting.servicesMDNS);
     Serial.print(F("  - servicesBLYNK: "));
@@ -2839,8 +3118,6 @@ void FILAMENT_ESTIMATOR::dumpSetting()
     Serial.println(setting.servicesWebServer);
     Serial.print(F("  - servicesArduinoOTA: "));
     Serial.println(setting.servicesArduinoOTA);
-    Serial.print(F("  - servicesReserved1: "));
-    Serial.println(setting.servicesReserved1);
 
     Serial.println(F("Setting dump completed."));
 }
@@ -3084,28 +3361,36 @@ void FILAMENT_ESTIMATOR::loadConfig()
         return;
     }
 
-    //parse json content into config variables
+    //Use local json buffer to free up memory after loading
+    DynamicJsonDocument jsonDoc(JSON_DOC_BUFFER_SIZE);
+
     deserializeJson(jsonDoc, configFile);
-    config_version = jsonDoc["config_version"]; // "0.3.0"
-    wifi_ssid = jsonDoc["wifi_ssid"];           // "your_ssid"
-    wifi_password = jsonDoc["wifi_password"];   // "your_password"
-    blynk_auth = jsonDoc["blynk_auth"];         // "your_blynk_auth_token"
+
+    strlcpy(config_version, jsonDoc["config_version"] | "", 16);
+    strlcpy(wifi_ssid, jsonDoc["wifi_ssid"] | "", 32);
+    strlcpy(wifi_password, jsonDoc["wifi_password"] | "", 63);
+    strlcpy(blynk_auth, jsonDoc["blynk_auth"] | "", 32);
 
     uint8_t index = 0;
     for (JsonObject elem : jsonDoc["spool_holder"].as<JsonArray>())
     {
-        spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
+        strlcpy(spoolHolderSlotName[index], elem["name"] | "", 12);
+        //spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
         spoolHolderSlotWeight[index] = elem["weight"]; // 180, 150, 250, 250, 250
         index++;
     }
     spoolHolderSlotSize = index;
-    Serial.println(F("Config file loaded."));
+
+    Serial.print(F("Config file version "));
+    Serial.print(config_version);
+
+    Serial.println(F(" loaded."));
 }
 void FILAMENT_ESTIMATOR::dumpConfig()
 {
     Serial.println(F("Dump config:"));
-    Serial.println(F("Serialized jsonDoc content:"));
-    serializeJson(jsonDoc, Serial);
+    //Serial.println(F("Serialized jsonDoc content:"));
+    //serializeJson(jsonDoc, Serial);
     Serial.println();
     Serial.println(F("Deserialized data:"));
     Serial.print(F("config_version:"));
@@ -3125,35 +3410,35 @@ void FILAMENT_ESTIMATOR::dumpConfig()
         Serial.println(spoolHolderSlotWeight[index]);
         index++;
     }
-    Serial.print("spoolHolderSlotSize = ");
+    Serial.print(F("spoolHolderSlotSize = "));
     Serial.println(spoolHolderSlotSize);
     Serial.println(F("Dump config completed."));
 }
 void FILAMENT_ESTIMATOR::replyOK()
 {
-    server.send(200, FPSTR(TEXT_PLAIN), "");
+    webServer->send(200, FPSTR(TEXT_PLAIN), "");
 }
 void FILAMENT_ESTIMATOR::replyOKWithMsg(String msg)
 {
-    server.send(200, FPSTR(TEXT_PLAIN), msg);
+    webServer->send(200, FPSTR(TEXT_PLAIN), msg);
 }
 void FILAMENT_ESTIMATOR::replyNotFound(String msg)
 {
-    server.send(404, FPSTR(TEXT_PLAIN), msg);
+    webServer->send(404, FPSTR(TEXT_PLAIN), msg);
 }
 void FILAMENT_ESTIMATOR::replyBadRequest(String msg)
 {
     Serial.println(msg);
-    server.send(400, FPSTR(TEXT_PLAIN), msg + "\r\n");
+    webServer->send(400, FPSTR(TEXT_PLAIN), msg + "\r\n");
 }
 void FILAMENT_ESTIMATOR::replyServerError(String msg)
 {
     Serial.println(msg);
-    server.send(500, FPSTR(TEXT_PLAIN), msg + "\r\n");
+    webServer->send(500, FPSTR(TEXT_PLAIN), msg + "\r\n");
 }
 void FILAMENT_ESTIMATOR::handleStatus()
 {
-    Serial.println("handleStatus");
+    Serial.println(F("handleStatus"));
     FSInfo fs_info;
     String json;
     json.reserve(128);
@@ -3178,7 +3463,7 @@ void FILAMENT_ESTIMATOR::handleStatus()
     json += unsupportedFiles;
     json += "\"}";
 
-    server.send(200, "application/json", json);
+    webServer->send(200, "application/json", json);
 }
 void FILAMENT_ESTIMATOR::handleFileList()
 {
@@ -3187,15 +3472,15 @@ void FILAMENT_ESTIMATOR::handleFileList()
         return replyServerError(FPSTR(FS_INIT_ERROR));
     }
 
-    if (!server.hasArg("dir"))
+    if (!webServer->hasArg("dir"))
     {
         return replyBadRequest(F("DIR ARG MISSING"));
     }
 
-    String path = server.arg("dir");
+    String path = webServer->arg("dir");
     if (path != "/" && !fileSystem->exists(path))
     {
-        return replyBadRequest("BAD PATH");
+        return replyBadRequest(F("BAD PATH"));
     }
 
     Serial.println(String("handleFileList: ") + path);
@@ -3203,9 +3488,9 @@ void FILAMENT_ESTIMATOR::handleFileList()
     path.clear();
 
     // use HTTP/1.1 Chunked response to avoid building a huge temporary string
-    if (!server.chunkedResponseModeStart(200, "text/json"))
+    if (!webServer->chunkedResponseModeStart(200, "text/json"))
     {
-        server.send(505, F("text/html"), F("HTTP1.1 required"));
+        webServer->send(505, F("text/html"), F("HTTP1.1 required"));
         return;
     }
 
@@ -3219,7 +3504,7 @@ void FILAMENT_ESTIMATOR::handleFileList()
         {
             // send string from previous iteration
             // as an HTTP chunk
-            server.sendContent(output);
+            webServer->sendContent(output);
             output = ',';
         }
         else
@@ -3254,8 +3539,8 @@ void FILAMENT_ESTIMATOR::handleFileList()
 
     // send last string
     output += "]";
-    server.sendContent(output);
-    server.chunkedResponseFinalize();
+    webServer->sendContent(output);
+    webServer->chunkedResponseFinalize();
 }
 bool FILAMENT_ESTIMATOR::handleFileRead(String path)
 {
@@ -3272,7 +3557,7 @@ bool FILAMENT_ESTIMATOR::handleFileRead(String path)
     }
 
     String contentType;
-    if (server.hasArg("download"))
+    if (webServer->hasArg("download"))
     {
         contentType = F("application/octet-stream");
     }
@@ -3289,9 +3574,9 @@ bool FILAMENT_ESTIMATOR::handleFileRead(String path)
     if (fileSystem->exists(path))
     {
         File file = fileSystem->open(path, "r");
-        if (server.streamFile(file, contentType) != file.size())
+        if (webServer->streamFile(file, contentType) != file.size())
         {
-            Serial.println("Sent less data than expected!");
+            Serial.println(F("Sent less data than expected!"));
         }
         file.close();
         return true;
@@ -3322,7 +3607,7 @@ void FILAMENT_ESTIMATOR::handleFileCreate()
         return replyServerError(FPSTR(FS_INIT_ERROR));
     }
 
-    String path = server.arg("path");
+    String path = webServer->arg("path");
     if (path.isEmpty())
     {
         return replyBadRequest(F("PATH ARG MISSING"));
@@ -3330,14 +3615,14 @@ void FILAMENT_ESTIMATOR::handleFileCreate()
 
     if (path == "/")
     {
-        return replyBadRequest("BAD PATH");
+        return replyBadRequest(F("BAD PATH"));
     }
     if (fileSystem->exists(path))
     {
         return replyBadRequest(F("PATH FILE EXISTS"));
     }
 
-    String src = server.arg("src");
+    String src = webServer->arg("src");
     if (src.isEmpty())
     {
         // No source specified: creation
@@ -3431,7 +3716,7 @@ void FILAMENT_ESTIMATOR::handleFileDelete()
         return replyServerError(FPSTR(FS_INIT_ERROR));
     }
 
-    String path = server.arg(0);
+    String path = webServer->arg(0);
     if (path.isEmpty() || path == "/")
     {
         return replyBadRequest("BAD PATH");
@@ -3452,11 +3737,11 @@ void FILAMENT_ESTIMATOR::handleFileUpload()
     {
         return replyServerError(FPSTR(FS_INIT_ERROR));
     }
-    if (server.uri() != "/edit")
+    if (webServer->uri() != "/edit")
     {
         return;
     }
-    HTTPUpload &upload = server.upload();
+    HTTPUpload &upload = webServer->upload();
     if (upload.status == UPLOAD_FILE_START)
     {
         String filename = upload.filename;
@@ -3501,7 +3786,7 @@ void FILAMENT_ESTIMATOR::handleNotFound()
         return replyServerError(FPSTR(FS_INIT_ERROR));
     }
 
-    String uri = ESP8266WebServer::urlDecode(server.uri()); // required to read paths with blanks
+    String uri = ESP8266WebServer::urlDecode(webServer->uri()); // required to read paths with blanks
 
     if (handleFileRead(uri))
     {
@@ -3514,20 +3799,20 @@ void FILAMENT_ESTIMATOR::handleNotFound()
     message = F("Error: File not found\n\nURI: ");
     message += uri;
     message += F("\nMethod: ");
-    message += (server.method() == HTTP_GET) ? "GET" : "POST";
+    message += (webServer->method() == HTTP_GET) ? "GET" : "POST";
     message += F("\nArguments: ");
-    message += server.args();
+    message += webServer->args();
     message += '\n';
-    for (uint8_t i = 0; i < server.args(); i++)
+    for (uint8_t i = 0; i < webServer->args(); i++)
     {
         message += F(" NAME:");
-        message += server.argName(i);
+        message += webServer->argName(i);
         message += F("\n VALUE:");
-        message += server.arg(i);
+        message += webServer->arg(i);
         message += '\n';
     }
     message += "path=";
-    message += server.arg("path");
+    message += webServer->arg("path");
     message += '\n';
     Serial.print(message);
 
@@ -3884,7 +4169,7 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     previousTotalWeight = totalWeight;
 
-    //printMemory(); //debug oom
+    //globalPrintMemory(); //debug oom
 
     detectionTimer = millis();
 }
@@ -4022,6 +4307,11 @@ uint8_t FILAMENT_ESTIMATOR::getStddevCount(float threshold)
 }
 void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
 {
+    if (!Blynk.connected())
+    {
+        Serial.println(F("Failed. Blynk not connected."));
+        return;
+    }
     switch (message)
     {
     case NOTIFICATION_TEST_MESSAGE:
@@ -4145,37 +4435,49 @@ void FILAMENT_ESTIMATOR::setNotificationSetting(uint8_t selection, bool value)
 }
 void FILAMENT_ESTIMATOR::queryMDNS()
 {
-    Serial.println(F("Query 'spooder' services in the local network:"));
-    int n = MDNS.queryService("spooder", "tcp"); // Send out query for esp tcp services
-    Serial.println(F("mDNS query done"));
-    if (n == 0)
+    if (MDNS.isRunning() == true)
     {
-        Serial.println("no services found");
-    }
-    else
-    {
-        Serial.print(n);
-        Serial.println(" service(s) found");
-        for (int i = 0; i < n; ++i)
+        Serial.println(F("Query 'spooder' services in the local network:"));
+        int n = MDNS.queryService("spooder", "tcp"); // Send out query for esp tcp services
+        Serial.println(F("mDNS query done."));
+        if (n == 0)
         {
-            // Print details for each service found
-            Serial.print(i + 1);
-            Serial.print(": ");
-            Serial.print(MDNS.answerHostname(i));
-            Serial.print(" (");
-            Serial.print(MDNS.answerIP(i));
-            Serial.print(":");
-            Serial.print(MDNS.answerPort(i));
-            Serial.print(") TXT:");
-            //Serial.print(MDNS.answerTxts())
-
-            Serial.println();
+            Serial.println("No services found.");
         }
+        else //services found
+        {
+            Serial.print(n);
+            Serial.println(" service(s) found");
+            for (int i = 0; i < n; ++i)
+            {
+                // Print details for each service found
+                Serial.print(i + 1);
+                Serial.print(": ");
+                Serial.print(MDNS.answerHostname(i));
+                Serial.print(" (");
+                Serial.print(MDNS.answerIP(i));
+                Serial.print(":");
+                Serial.print(MDNS.answerPort(i));
+                //Serial.print(") TXT:");
+                //Serial.print(MDNS.answerTxts())
+
+                Serial.println();
+            }
+        }
+    }
+    else //MDNS is not running on this device
+    {
+        Serial.println(F("Failed. mDNS is not running."));
     }
     return;
 }
 void FILAMENT_ESTIMATOR::updateServiceTxt()
 {
+    if (MDNS.isRunning() == false)
+    {
+        Serial.println(F("Failed. mDNS is not running."));
+        return;
+    }
 
     Serial.print(F("Update mDNS service txt: filament,"));
     Serial.print((int16_t)filamentWeight);
@@ -4189,48 +4491,36 @@ void FILAMENT_ESTIMATOR::updateServiceTxt()
 }
 void FILAMENT_ESTIMATOR::printSpoodersDataset()
 {
-    outsidePrintSpoodersDataset();
+    if (MDNS.isRunning() == false)
+    {
+        Serial.println(F("Failed. mDNS is not running."));
+        return;
+    }
+    globalPrintSpoodersDataset();
     return;
-}
-void printMemory(String s)
-{
-    Serial.print(s);
-    Serial.print(F(" Heap: "));
-    Serial.print(ESP.getFreeHeap());
-    Serial.print(F("    Block: "));
-    Serial.println(ESP.getMaxFreeBlockSize());
 }
 void FILAMENT_ESTIMATOR::checkGithubTag()
 {
-    outsideCheckGithubTag(false);
-    return;
-    /*
+    Serial.println(F("Checking github firmware version:"));
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("checkGithubTag failed. WiFi not connected."));
+        return;
+    }
     if (LittleFS.begin())
     {
         Serial.println("LittleFS ok.");
+        //listDir("");
     }
     else
     {
         Serial.println("LittleFS failed.");
+        return;
     }
-    Dir dir = LittleFS.openDir("/");
-    while (dir.next())
-    {
-        Serial.print(dir.fileName());
-        File f = dir.openFile("r");
-        Serial.println(f.size());
-    }
-
-    WiFi.mode(WIFI_STA);
-    Serial.print("Connecting WiFi...");
-    WiFi.begin();
-    if ((WiFi.status() != WL_CONNECTED))
-    {
-        Serial.print(".");
-    }
-    Serial.println("Ok!");
-
-    int numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
+    BearSSL::CertStore certStore;
+    _certStore = &certStore;
+    numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
     Serial.print(F("Number of CA certs read: "));
     Serial.println(numCerts);
     if (numCerts == 0)
@@ -4238,28 +4528,70 @@ void FILAMENT_ESTIMATOR::checkGithubTag()
         Serial.println(F("No CA certs found. Unable to establish https connection."));
         return;
     }
-    Serial.println(F("Checking Github latest version:"));
-    ESPOTAGitHub ESPOTAGitHub(&certStore, GHOTA_USER, GHOTA_REPO, GHOTA_CURRENT_TAG, GHOTA_BIN_FILE, GHOTA_ACCEPT_PRERELEASE);
+    globalPrintMemory("After certs read");
+    BearSSL::WiFiClientSecure client; //7k memory required
+    globalPrintMemory(F("After client creation."));
+    client.setCertStore(_certStore);
 
-    if (ESPOTAGitHub.checkUpgrade())
+    if (!client.connect(_host, _port)) //22k memory required
     {
-        Serial.print("Update found at: ");
-        Serial.println(ESPOTAGitHub.getUpgradeURL());
+        Serial.println(F("Connection to gitgub failed"));
     }
     else
     {
-        Serial.print("Error: ");
-        Serial.println(ESPOTAGitHub.getLastError());
+    }
+    globalPrintMemory("After client connection");
+
+    /*String url = "/repos/";
+    url += _user;
+    url += "/";
+    url += _repo;
+    url += "/releases/latest";
+    */
+    //String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest";
+    String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/tags";
+    //String url = "/repos/yknivag/ESP_OTA_GitHub_Showcase/releases/latest";
+    //String url = "/repos/yknivag/ESP_OTA_GitHub_Showcase/tags";
+    Serial.print(F("Connection to: "));
+    Serial.println(url);
+
+    //rate limit to 60 calls per hour
+
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + _host + "\r\n" +
+                 "User-Agent: ESP_OTA_GitHubArduinoLibrary\r\n" +
+                 "Connection: close\r\n\r\n");
+
+    while (client.connected())
+    {
+        String s = client.readString();
+        Serial.println(s);
     }
 
-    return;
+    /*
+    while (client.connected())
+    {
+        String response = client.readStringUntil('\n');
+        Serial.println(response);
+        if (response == "\r")
+        {
+            break;
+        }
+    }
+    String response = client.readStringUntil('\n');
+    Serial.println(response);
     */
+
+    globalPrintMemory("After printing last response");
 }
 bool FILAMENT_ESTIMATOR::getServicesSetting(uint8_t selection)
 {
     bool result = false;
     switch (selection)
     {
+    case SERVICES_MENU_WIFI:
+        result = setting.servicesWiFi;
+        break;
     case SERVICES_MENU_MDNS:
         result = setting.servicesMDNS;
         break;
@@ -4272,9 +4604,7 @@ bool FILAMENT_ESTIMATOR::getServicesSetting(uint8_t selection)
     case SERVICES_MENU_ARDUINO_OTA:
         result = setting.servicesArduinoOTA;
         break;
-    case SERVICES_MENU_RESERVED_1:
-        result = setting.servicesReserved1;
-        break;
+
     default:
         break;
     }
@@ -4284,6 +4614,9 @@ void FILAMENT_ESTIMATOR::setServicesSetting(uint8_t selection, bool value)
 {
     switch (selection)
     {
+    case SERVICES_MENU_WIFI:
+        setting.servicesWiFi = value;
+        break;
     case SERVICES_MENU_MDNS:
         setting.servicesMDNS = value;
         break;
@@ -4296,11 +4629,11 @@ void FILAMENT_ESTIMATOR::setServicesSetting(uint8_t selection, bool value)
     case SERVICES_MENU_ARDUINO_OTA:
         setting.servicesArduinoOTA = value;
         break;
-    case SERVICES_MENU_RESERVED_1:
-        setting.servicesReserved1 = value;
-        break;
     default:
         break;
     }
+    Serial.print(servicesMenuTitle[selection]);
+    Serial.print(F(" set to: "));
+    Serial.println((value == true) ? "On" : "Off");
     saveToEEPROM();
 }

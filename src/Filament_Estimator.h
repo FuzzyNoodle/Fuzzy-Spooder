@@ -18,6 +18,11 @@
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
 
+//Debug switches
+#define BLYNK_PRINT Serial // Defines the object that is used for printing
+//#define BLYNK_DEBUG        // Optional, this enables more detailed prints
+#define BLYNK_NO_FANCY_LOGO
+
 //Rotary library
 #include "ESPRotary.h"
 #include "Button2.h"
@@ -49,8 +54,11 @@
 #include <LittleFS.h>
 #include <WiFiClient.h>
 
-//Blynk
+//ArduinoOTA
+#define NO_GLOBAL_ARDUINOOTA
+#include <ArduinoOTA.h>
 
+//Blynk
 #define JSON_DOC_BUFFER_SIZE 1024
 #define SPOOL_HOLDER_MAX_SLOT_SIZE 32
 
@@ -168,11 +176,11 @@
 //#include <ESP_OTA_GitHub.h>
 /* Set up values for your repository and binary names */
 
-#define GHOTA_USER "FuzzyNoodle"
-#define GHOTA_REPO "Fuzzy-Spooder"
-#define GHOTA_CURRENT_TAG CURRENT_VERSION
-#define GHOTA_BIN_FILE "fuzzy_spooder.bin"
-#define GHOTA_ACCEPT_PRERELEASE 1
+//#define GHOTA_USER "FuzzyNoodle"
+//#define GHOTA_REPO "Fuzzy-Spooder"
+//#define GHOTA_CURRENT_TAG CURRENT_VERSION
+//#define GHOTA_BIN_FILE "fuzzy_spooder.bin"
+//#define GHOTA_ACCEPT_PRERELEASE 1
 /*
 #define GHOTA_USER "yknivag"
 #define GHOTA_REPO "ESP_OTA_GitHub_Showcase"
@@ -189,7 +197,7 @@ public:
   void update(void);
 
   //Optional: enable wifi function
-  void setWifi(bool wifi);
+  void setWifi(bool value);
 
   void buttonHandler(Button2 &btn);
   void rotaryHandler(ESPRotary &rty);
@@ -233,8 +241,10 @@ public:
   void replyOK();
   void checkGithubTag();
 
+  void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
+
 private:
-  ESP8266WebServer server;
+  //ESP8266WebServer server;
   Button2 button;
   ESPRotary rotary;
   SSD1306Wire display;
@@ -263,27 +273,41 @@ private:
     uint8_t notifyOnFallOffRack;
     uint8_t notifyOnFallOffBearing;
     uint8_t notifyOnTangled;
-
+    uint8_t servicesWiFi;
     uint8_t servicesMDNS;
     uint8_t servicesBLYNK;
     uint8_t servicesWebServer;
     uint8_t servicesArduinoOTA;
-    uint8_t servicesReserved1;
   } setting;
 
-  //wifi related
+  //Network related
   bool enableWifi = false;
   uint8_t wifiStatus = WIFI_STATUS_BOOT;
-  bool ArduinoOTAConfigured = false;
-  bool serverConfigured = false;
+  bool enableBlynk = false;
+  bool enableWebServer = false;
+  bool enableArduinoOTA = false;
+  bool enableNetworkTime = true;
   void updateWifi();
   void connectWifi();
   void beginServices();
-  void beginmDNS();
-  void beginServer();
-  void beginArduinoOTA();
-  void beginBlynk();
-  bool blynkConnected = false;
+  void setMDNS(bool value);
+  void setBlynk(bool value);
+  void setWebServer(bool value);
+  void setArduinoOTA(bool value);
+  ArduinoOTAClass *ArduinoOTA; //use pointer to creat/delete object in code
+  ESP8266WebServer *webServer; //use pointer to creat/delete object in code
+  void installDynamicServiceQuery();
+  bool netWorkTimeReceived = false;
+  void updateNetworkTime();
+  uint32_t updateNetworkTimeTimer;
+  uint32_t UPDATE_NETWORK_TIME_PERIOD = 1000;
+
+  struct SPOODERS_DATASET_STRUCT
+  {
+    char hostname[10];
+    IPAddress ip;
+    int16_t fw; //filament weight in gram
+  } dataset[20];
 
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;
@@ -310,7 +334,7 @@ private:
   void tare();
   void calibrate();
   uint32_t returnToHomepageTimer;
-  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 30000;
+  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 3000000;
   void checkCurrentPage();
 
   uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
@@ -421,22 +445,22 @@ private:
       "<<-- Return to Menu "};
   enum SERVICE_MENU
   {
+    SERVICES_MENU_WIFI,
     SERVICES_MENU_MDNS,
     SERVICES_MENU_BLYNK,
     SERVICES_MENU_WEB_SERVER,
     SERVICES_MENU_ARDUINO_OTA,
-    SERVICES_MENU_RESERVED_1,
     SERVICES_MENU_RETURN
   };
   String servicesMenuTitle[6] =
       {
+          "WiFi",
           "mDNS",
           "Blynk",
           "Web server",
           "Arduino OTA",
-          "Reserved_1",
           "<<-- Return to Debug"};
-  uint8_t servicesMenuSelection = SERVICES_MENU_MDNS;
+  uint8_t servicesMenuSelection = SERVICES_MENU_WIFI;
   uint8_t servicesMenuItemStartIndex = 0;
   uint8_t servicesMenuItemPerPage = 5;
   uint8_t numberOfServicesMenuItems = 6;
@@ -474,14 +498,17 @@ private:
   uint16_t configSize;
   void loadConfig(); //load the config file into buffer
   void dumpConfig(); //Pring all the config.json content for debugging purpose
-  StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDoc;
-  //DynamicJsonDocument jsonDoc;
-  const char *config_version; // "0.3.0"
-  const char *wifi_ssid;      // "your_ssid"
-  const char *wifi_password;  // "your_password"
-  const char *blynk_auth;
 
-  const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
+  //StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDocS;
+
+  char config_version[16]; // "0.3.0"
+  char wifi_ssid[32];      // "your_ssid", max 32 bytes
+  char wifi_password[63];  // "your_password", max 63 bytes
+  char blynk_auth[32];     // 32-bytes blynk authorization code
+
+  //const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
+  char spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE][12];
+
   uint16_t spoolHolderSlotWeight[SPOOL_HOLDER_MAX_SLOT_SIZE];
   uint8_t spoolHolderSlotSize = 0;
   uint8_t spoolHolderSlotStartIndex = SPOOL_HOLDER_SLOT_1;
@@ -497,7 +524,7 @@ private:
   const uint32_t SET_SPOODER_ID_EDIT_MODE_PERIOD = 500;
   String hostname = "";
 
-  void drawSymbols();
+  void drawSymbols(); //Draw WiFi and Blynk symbols
   uint8_t connectionStatus = CONNECTION_STATUS_NONE;
   uint8_t symbolType = SYMBOL_NONE;
   uint32_t displayConnectionStatusTimer;
@@ -618,9 +645,21 @@ private:
   MDNSResponder::hMDNSService spooderService = 0; // The handle of the spooder service in the MDNS responder
   void updateServiceTxt();
   void printSpoodersDataset();
-  //void printMemory();
-  //BearSSL::CertStore certStore;
-  //uint16_t numCerts = 0; //number or certs read from file system
+  //void globalPrintMemory();
+
+  //Github auto-update function related:
+  //Imported from https://github.com/yknivag/ESP_OTA_GitHub
+  BearSSL::CertStore *_certStore;
+  String _lastError;  // Holds the last error generated
+  String _upgradeURL; // Holds the upgrade URL (changes when getFinalURL() is run).
+  const char *_user = "FuzzyNoodle";
+  const char *_repo = "Fuzzy-Spooder";
+  const char *_host = "api.github.com";
+  int _port = 443;
+  const char *_currentTag = CURRENT_VERSION;
+  const char *_binFile = "fuzzy_spooder.bin";
+  bool _preRelease = true;
+  int numCerts = 0; //number or certs read from file system
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

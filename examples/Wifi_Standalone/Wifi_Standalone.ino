@@ -12,25 +12,12 @@ Functions implemented:
 
 */
 #include "Filament_Estimator.h"
-
 // Create the fuzzy spooder object
 FILAMENT_ESTIMATOR spooder;
 
 //BearSSL::CertStore certStore;
 //uint16_t numCerts = 0; //number or certs read from file system
 //extern void outsideCheckGithubTag(bool connectWiFi);
-
-void printMemory()
-{
-  Serial.print(ESP.getFreeHeap());
-  Serial.print("\t");
-  Serial.print(ESP.getHeapFragmentation());
-  Serial.print("\t");
-  Serial.println(ESP.getMaxFreeBlockSize());
-}
-
-uint32_t checkGithubTimer;
-bool checkGithubFlag = false;
 
 void setup()
 {
@@ -40,7 +27,7 @@ void setup()
   //Enable the Serial for debug outout, not required.
   Serial.begin(115200);
 
-  //Serial.println("Check Gitgub before spooder begin:");
+  Serial.println("Check Gitgub before spooder begin:");
   //outsideCheckGithubTag(true);
 
   //Initialize the spooder, required.
@@ -65,11 +52,7 @@ void setup()
   spooder.setCurrentSpoolHolderWeight(180);
 
   //Optional: enable wifi function
-  spooder.setWifi(true);
-  //Serial.println("Check Gitgub after setWifi:");
-  //outsideCheckGithubTag(false);
-
-  checkGithubTimer = millis();
+  //spooder.setWifi(true);
 }
 
 void loop()
