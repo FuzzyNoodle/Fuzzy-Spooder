@@ -12,8 +12,8 @@
 //#version for this firmware
 #define CURRENT_VERSION_MAJOR 0
 #define CURRENT_VERSION_MINOR 6
-#define CURRENT_VERSION_PATCH 3
-#define CURRENT_VERSION "0.6.3"
+#define CURRENT_VERSION_PATCH 5
+#define CURRENT_VERSION "0.6.5"
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
