@@ -130,10 +130,10 @@ After setting the OTA environment in the platformio.ini file, select the intende
 
 ### Using the Spooder
 
-A manual tare needs to bo done at least once with the spool removed.
-A calibration needs to be done at least once with known weight.
-A unique Spooder ID needs to be set for each spooder.
-A spool holder weight, corresponging to the current spool being used, needs to be set in the UI, for the filament weight estimation.
+
+
+
+
 
 There are three main pages:
 - **Spooder Home Page**:
@@ -144,11 +144,11 @@ There are three main pages:
 - **Info Page**:
   - Displays additional information
 - **Menu Page**: Rotate and click the menu items. Currently available menu items are:
-  - Tare: Perform a tare manually. The current tare offset value is saved into EEPROM.
-  - Calibrate: Perform a calibration. Calibrated value is saved into EEPROM.
-  - Spool Holder Weight: Set spool holder weight, or load preset values.
-  - Set Spooder ID: Set the unique spooder ID.
-  - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 50 g.
+  - Tare: Perform a tare manually. The current tare offset value is saved into EEPROM. A manual tare needs to bo done at least once with the spool removed.
+  - Calibrate: Perform a calibration. Calibrated value is saved into EEPROM. A calibration needs to be done at least once with known weight.
+  - Spool Holder Weight: Set spool holder weight, or load preset values. This is used for the filament weight estimation.
+  - Set Spooder ID: Set the spooder ID. An unique Spooder ID needs to be set for each spooder.
+  - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 80 g.
   - Notification: User option to enable or disable each notification type. 
   - Firmware Update: Update firmware from github repository directly.
   - Debug: Various debugging functions.
@@ -189,8 +189,7 @@ Each spooder can update its own firmware over-the-air from this [github reposito
 
 Manual **Check Now**, and manual **Update Now** can be performed anytime. The version check would normally take around 10~15 seconds.
 
-If the **Auto Update** option is set to **On**, the device will check the latest gitgub release periodically, and update firmware if there is a newer release.  Due to the github api [60 requests per hour rate limit](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting), the interval between automatic version checks is set between 60 to 120 minutes. Automatic update is inhibited for 10 minutes if any filament movements are detected. Automatic update is also inhibited for some additional time right after a successful automatic firmware update.
-
+If the **Auto Update** option is set to **On**, the device will check the latest github release periodically, and will update the firmware if there is a newer version.  Due to the github api [60 requests per hour rate limit](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting), the interval between automatic version checks is set between 60 to 120 minutes. Automatic update is inhibited for 10 minutes if any filament movements are detected. The next check interval is also extended right after a successful automatic firmware update.
 
 
 #### Browser File Manager
