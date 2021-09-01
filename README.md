@@ -46,12 +46,12 @@ The default platformio.ini configuration would be something like:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
-lib_deps = georgychen/Fuzzy Spooder@^0.7.0
+lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 ```
 
 Modify the configuration section to:
 ```
-[env:NoWifi_Demo Example - USB Serial]
+[env:Spooder Example - USB Serial]
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
@@ -62,7 +62,7 @@ build_flags = -w
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
-lib_deps = georgychen/Fuzzy Spooder@^0.7.0
+lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
@@ -121,7 +121,7 @@ monitor_filters = send_on_enter
 upload_protocol = espota
 ;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved
 upload_port = spooderA1.local ;using mDNS, replace with actual name
-lib_deps = georgychen/Fuzzy Spooder@^0.7.0
+lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 ```
 
 After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload. If the mDNS hostname is not resolved, you can use the IP address.
