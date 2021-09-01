@@ -10,7 +10,7 @@
 #define FILAMENT_ESTIMATOR_H
 
 //Version for this firmware
-#define CURRENT_VERSION "1.0.0"
+#define CURRENT_VERSION "1.0.1"
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
