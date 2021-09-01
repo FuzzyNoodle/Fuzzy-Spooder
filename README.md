@@ -1,13 +1,10 @@
-## Important Notice
-This library is work in progress, not ready for general usage. It is registered in library manger for development purpose only.
-
 # Fuzzy-Spooder
-An add-on filament autochanger for existing 3D printers, in duel-spool configuration.
+An add-on filament estimator for existing 3D printers. It provides filament remaining weight, track printer status, and send notifications to your mobile device. A WiFi environment is required for most functions.
 
 ---
 ## Getting Started
 
-### Upload the NoWifi_Demo Example
+### Upload the Spooder Example
 
 #### Using Arduino IDE
 
@@ -24,19 +21,19 @@ An add-on filament autochanger for existing 3D printers, in duel-spool configura
     6. [ArduinoJson](https://github.com/bblanchon/ArduinoJson) by Benoit Blanchon, version 6.17.3
 
 
-6. Open the ```File->Examples->Fuzzy Spooder->NoWifi_Demo``` sketch and upload to your board via USB connection. Correct port needs to be selected.
+6. Open the ```File->Examples->Fuzzy Spooder->Spooder``` sketch and upload to your board via USB connection. Correct port needs to be selected.
 7. [Upload](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) the data files in the \data folder too. See below.
 
 
 #### Using VSCode IDE + platformio extension
 
 1. ```PIO Home-> New Project```
-    1. Name: **NoWifi_Demo** for example
+    1. Name: **Spooder** for example
     2. Board: Search "mcu" select **NodeMCU 1.0 (ESP-12E Module)**
     3. Framework: **Arduino**
 2. ```PIO Home->Libraries->Search``` and go to **"Fuzzy Spooder"**.
-3. Add to Project -> Select the project you just created. (ex. ```Projects\NoWifi_Demo```). The library dependencies should be automataclly downloaded and installed.
-4. On the same page, select and copy all the sketch code from the NoWifi_Demo
+3. Add to Project -> Select the project you just created. (ex. ```Projects\Spooder```). The library dependencies should be automataclly downloaded and installed.
+4. On the same page, select and copy all the sketch code from the Spooder 
 5. Open ```VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->main.cpp```. Paste and overwrite the example sketch code copied from previous step.
 6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
 7. [Upload](https://diyprojects.io/esp8266-upload-data-folder-spiffs-littlefs-platformio) the data files in the \data folder too. See below.
@@ -49,7 +46,7 @@ The default platformio.ini configuration would be something like:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
-lib_deps = georgychen/Fuzzy Spooder@^0.4.0
+lib_deps = georgychen/Fuzzy Spooder@^0.7.0
 ```
 
 Modify the configuration section to:
@@ -58,13 +55,14 @@ Modify the configuration section to:
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
+board_build.f_cpu = 160000000L
 board_build.filesystem = littlefs
 board_build.ldscript = eagle.flash.4m1m.ld
 build_flags = -w
 monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
-lib_deps = georgychen/Fuzzy Spooder@^0.4.0
+lib_deps = georgychen/Fuzzy Spooder@^0.7.0
 
 ```
 This creates a more user friendly env:name, increases upload speed and enables serial debug. The [LittleFS filesystem](https://randomnerdtutorials.com/esp8266-nodemcu-vs-code-platformio-littlefs/) is used in this project.
@@ -84,17 +82,17 @@ For example, the data folder contains:
 #### Using Arduino IDE
 1. Copy the 'data' folder from the 
   - library (ex: ```arduino\libraies\Fuzzy_Spooder```) to your 
-  - sketch folder (ex: ```Arduino\NoWifi_Demo```).
+  - sketch folder (ex: ```Arduino\Spooder```).
 2. Edit the config.json file in the data folder as required. 
-3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB)``` to save upload time.
+3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB)```. This setup is required for OTA.
 3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266 flash memory. 
 
 #### Using VSCode IDE + platformio extension
 1. Copy the 'data' folder from the 
-  - library (ex: ```platformio_project_folder\.pio\libdeps\NoWifi_Demo\Fuzzy_Spooder```) to your 
-  - project folder (ex: ```platformio_project_folder\NoWifi_Demo```).
+  - library (ex: ```platformio_project_folder\.pio\libdeps\Spooder\Fuzzy_Spooder```) to your 
+  - project folder (ex: ```platformio_project_folder\Spooder```).
 2. Edit the config.json file in the data folder as required. 
-3. Use the ```PlatformIO->PROJECT TASKS->NoWifi_Demo->Platform->Upload Filesystem Image``` command to uplod the file image. Make you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
+3. Use the ```PlatformIO->PROJECT TASKS->Spooder->Platform->Upload Filesystem Image``` command to uplod the file image. Make SURE you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
 
 ---
 ### OTA Upload
@@ -109,10 +107,11 @@ Add two lines in your platformio.ini:
 Creating a [env] is recommended. The whole section would look like this:
 
 ```
-[env:Wifi_Standlone Example Example - OTA]
+[env:Spooder Example - OTA]
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
+board_build.f_cpu = 160000000L
 board_build.filesystem = littlefs
 board_build.ldscript = eagle.flash.4m1m.ld
 build_flags = -w
@@ -122,18 +121,19 @@ monitor_filters = send_on_enter
 upload_protocol = espota
 ;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved
 upload_port = spooderA1.local ;using mDNS, replace with actual name
-lib_deps = georgychen/Fuzzy Spooder@^0.4.0
+lib_deps = georgychen/Fuzzy Spooder@^0.7.0
 ```
 
 After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload. If the mDNS hostname is not resolved, you can use the IP address.
 
 ---
 
-### Using the NoWifi_Demo Example
+### Using the Spooder
 
-An automatic tare is initiated upon power on. Tare should be done with the printed rack, but without spool holder/filament. 
-
+A manual tare needs to bo done at least once with the spool removed.
 A calibration needs to be done at least once with known weight.
+A unique Spooder ID needs to be set for each spooder.
+A spool holder weight, corresponging to the current spool being used, needs to be set in the UI, for the filament weight estimation.
 
 There are three main pages:
 - **Spooder Home Page**:
@@ -141,33 +141,28 @@ There are three main pages:
     - Filament weight: an estimated weight (total - spool holder weight). Displays "Empty" when the value is below a negative value.
     - Spool holder weight: an user input value, adjustable in sketch.
     - Total weight: measured (spool holder + filament) weight.
-  - Long click: Perform a tare. 
 - **Info Page**:
   - Displays additional information
 - **Menu Page**: Rotate and click the menu items. Currently available menu items are:
-  - Tare: Perform a tare.
-  - Calibrate: Perform a calibration. Calibrated Value will be saved to EEPROM.
+  - Tare: Perform a tare manually. The current tare offset value is saved into EEPROM.
+  - Calibrate: Perform a calibration. Calibrated value is saved into EEPROM.
   - Spool Holder Weight: Set spool holder weight, or load preset values.
   - Set Spooder ID: Set the unique spooder ID.
   - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 50 g.
   - Notification: User option to enable or disable each notification type. 
+  - Firmware Update: Update firmware from github repository directly.
   - Debug: Various debugging functions.
 
 #### Spool Holder Weight
 
 Spool holder weight is a user input value in grams. This weight is used to estimate remaining filament weight. The default spool holder weight can be 
-- Set in the sketh using the `setCurrentSpoolHolderWeight(weight)` method. This method only works for the first time, where there is no previous data in the EEPROM, to prevent user set values being overridden upon reboot.
 - Adjusted in the spooder UI. 
 - Loaded from preset values.
 
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
-### Using the Wifi_Stndalone Example
-Add this line in your sketch setup:
-
- ```spooder.setWifi(true);``` 
-
- to enable the wifi function. User needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file system works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
+### Network Functions
+To enable the network functions, user needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file manager works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
 
 #### Spooder ID and mDNS
 
@@ -188,11 +183,21 @@ User has the option to enable or disable each notification type in the UI **Noti
 
 The nofification is sent through the [Blynk App](https://docs.blynk.cc/).
 
+#### Firmware Update from Github
 
-#### Browser File System
+Each spooder can update its own firmware over-the-air from this [github repository](https://github.com/FuzzyNoodle/Fuzzy-Spooder) manually or automatically, provided that the device is connected to the internet through WiFi. Current onboard version and latest version on github are displayed on the **Firmware Update** page. 
+
+Manual **Check Now**, and manual **Update Now** can be performed anytime. The version check would normally take around 10~15 seconds.
+
+If the **Auto Update** option is set to **On**, the device will check the latest gitgub release periodically, and update firmware if there is a newer release.  Due to the github api [60 requests per hour rate limit](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting), the interval between automatic version checks is set between 60 to 120 minutes. Automatic update is inhibited for 10 minutes if any filament movements are detected. Automatic update is also inhibited for some additional time right after a successful automatic firmware update.
+
+
+
+#### Browser File Manager
 
 After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
+Files can be uploaded, downloaded, or edited (for example, config.json) directly from the web browser.
 ---
 
 
@@ -207,13 +212,13 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 
 #### Installing Blynk App for Push Notification 
 (free for limited Widget usage)
-1. Install "Blynk" App (iOS or Android)
+1. Install "Blynk (legacy)" App (iOS or Android)
 2. Register a Blynk account
 3. New Project 
   - Name: ex. "Spooder"
   - Device: "ESP8266"
   - Connection Type: "WiFi"
-4. An unique Authorization Token (per project) will be sent to your registered email. Need to copy the code into the config.json under \data folder.   
+4. An unique Authorization Token (per project) will be sent to your registered email. The code needs to be copied into the config.json under \data folder.   
 5. Touch the design screen, a Widgex Box appear. Place a "Notification $400" widget.
 6. Press "Play" icon on the top right corner. Done. App doesn't need to be active for the notification to work.
 

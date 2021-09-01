@@ -52,23 +52,6 @@ void globalMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, 
     //pass information the the inside-class method
     estimatorPointer->MDNSServiceQueryCallback(serviceInfo, answerType, p_bSetContent);
 }
-/*
-static void globalInstallDynamicServiceQuery()
-{
-    if (!hMDNSServiceQuery)
-    {
-        hMDNSServiceQuery = MDNS.installServiceQuery("spooder", "tcp", globalMDNSServiceQueryCallback);
-        if (hMDNSServiceQuery)
-        {
-            Serial.println(F("Dynamic service query: 'spooder.tcp' install succeeded."));
-        }
-        else
-        {
-            Serial.println(F("Dynamic service query: 'spooder.tcp' install failed."));
-        }
-    }
-}
-*/
 static void globalPrintSpoodersDataset()
 {
     uint16_t count = 0;
@@ -107,61 +90,6 @@ static void globalPrintSpoodersDataset()
         }
     }
 }
-
-//BearSSL::CertStore certStore;
-//uint16_t numCerts = 0; //number or certs read from file system
-void globalPrintMemory(String s);
-void globalCheckGithubTag(bool connectWiFi)
-{
-    /*
-    globalPrintMemory("Start of globalCheckGithubTag()");
-
-    LittleFS.begin();
-    
-    if (connectWiFi == true)
-    {
-        if ((WiFi.status() != WL_CONNECTED))
-        {
-            WiFi.mode(WIFI_STA);
-            Serial.print("Connecting WiFi...");
-            WiFi.begin();
-            while ((WiFi.status() != WL_CONNECTED))
-            {
-                Serial.print(".");
-                delay(500);
-            }
-            Serial.println("Ok!");
-        }
-    }
-    if (numCerts == 0)
-    {
-        numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
-    }
-
-    // Serial.print(F("Number of CA certs read: "));
-    //Serial.println(numCerts);
-    if (numCerts == 0)
-    {
-        Serial.println(F("No CA certs found. Unable to establish https connection."));
-        return;
-    }
-    Serial.println(F("Checking Github latest version:"));
-    ESPOTAGitHub ESPOTAGitHub(&certStore, GHOTA_USER, GHOTA_REPO, GHOTA_CURRENT_TAG, GHOTA_BIN_FILE, GHOTA_ACCEPT_PRERELEASE);
-
-    if (ESPOTAGitHub.checkUpgrade())
-    {
-        Serial.print("Update found at: ");
-        Serial.println(ESPOTAGitHub.getUpgradeURL());
-    }
-    else
-    {
-        Serial.print("Error: ");
-        Serial.println(ESPOTAGitHub.getLastError());
-    }
-    globalPrintMemory("End of globalCheckGithubTag()");
-    */
-    return;
-}
 void globalPrintMemory(String s)
 {
     Serial.print(s);
@@ -186,9 +114,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 {
     Serial.println();
     //Firmware version setup
-    currentVersion.major = CURRENT_VERSION_MAJOR;
-    currentVersion.minor = CURRENT_VERSION_MINOR;
-    currentVersion.patch = CURRENT_VERSION_PATCH;
+    convertTagToVersion(CURRENT_VERSION, &currentVersion);
 
     Serial.println("Program started.");
     Serial.print(F("Firmware version "));
@@ -228,33 +154,24 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     displayMonoBitmap("/images/logo.bmp");
 
-    //Setup for rotary switch
-    estimatorPointer = this;
-    button.setClickHandler(globalButtonHandler);
-    button.setLongClickHandler(globalButtonHandler);
-    button.setDoubleClickHandler(globalButtonHandler);
-    button.setTripleClickHandler(globalButtonHandler);
-    rotary.setLeftRotationHandler(globalRotaryHandler);
-    rotary.setRightRotationHandler(globalRotaryHandler);
-    Serial.println(F("Rotary Switch setup ok."));
-
     //Setup for settings and eeprom
     EEPROM.begin(DECLARED_EEPROM_SIZE);
     //setting.calValue = 3.14159;
-    //Serial.print(F("Size of setting struct: "));
-    //Serial.println((uint32_t)sizeof(setting));
+    Serial.print(F("Size of setting struct: "));
+    Serial.println((uint32_t)sizeof(setting));
 
     //Load eeprom data to setting
     loadToSetting();
     //validate data and reset to defaults
     bool isDirty = false;
 
-    if (isnan(setting.calValue))
+    if (isnan(setting.calValue) || setting.calValue < 10)
     {
         Serial.println(F("EEPROM calValue invalid, using default value."));
         setting.calValue = DEFAULT_CALIBRATION_VALUE;
         isDirty = true;
     }
+
     Serial.print(F("Low filament threshold = "));
     Serial.println(setting.lowFilamentThreshold);
     if (setting.lowFilamentThreshold > 9999)
@@ -268,6 +185,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
     lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
+    setCalibrationWeight(setting.calibrationWeight); //set the four digits
     //dumpSetting();
 
     //Initialize notification settings for the first time
@@ -303,32 +221,48 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     }
 
     //Initialize services settings for the first time
-    if (setting.servicesWiFi != 0 && setting.servicesWiFi != 1)
+    if (setting.optionsWiFi != 0 && setting.optionsWiFi != 1)
     {
-        setting.servicesWiFi = true;
+        setting.optionsWiFi = true;
         isDirty = true;
     }
-    if (setting.servicesMDNS != 0 && setting.servicesMDNS != 1)
+    if (setting.optionsMDNS != 0 && setting.optionsMDNS != 1)
     {
-        setting.servicesMDNS = true;
+        setting.optionsMDNS = true;
         isDirty = true;
     }
-    if (setting.servicesBLYNK != 0 && setting.servicesBLYNK != 1)
+    if (setting.optionsBLYNK != 0 && setting.optionsBLYNK != 1)
     {
-        setting.servicesBLYNK = true;
+        setting.optionsBLYNK = true;
         isDirty = true;
     }
-    if (setting.servicesWebServer != 0 && setting.servicesWebServer != 1)
+    if (setting.optionsWebServer != 0 && setting.optionsWebServer != 1)
     {
-        setting.servicesWebServer = true;
+        setting.optionsWebServer = true;
         isDirty = true;
     }
-    if (setting.servicesArduinoOTA != 0 && setting.servicesArduinoOTA != 1)
+    if (setting.optionsArduinoOTA != 0 && setting.optionsArduinoOTA != 1)
     {
-        setting.servicesArduinoOTA = true;
+        setting.optionsArduinoOTA = true;
+        isDirty = true;
+    }
+    if (setting.optionsAutoHomepage != 0 && setting.optionsAutoHomepage != 1)
+    {
+        setting.optionsAutoHomepage = true;
         isDirty = true;
     }
 
+    //Initialize auto github update settings for the first time
+    if (setting.autoGithubUpdate != 0 && setting.autoGithubUpdate != 1)
+    {
+        setting.autoGithubUpdate = false; //auto update default value is off
+        isDirty = true;
+    }
+    if (setting.automaticUpdateJustPerformed != 0 && setting.automaticUpdateJustPerformed != 1)
+    {
+        setting.automaticUpdateJustPerformed = false;
+        isDirty = true;
+    }
     if (isDirty == true)
     {
         Serial.println(F("Initializing EEPROM"));
@@ -373,27 +307,46 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     loadConfig();
     //dumpConfig();
 
+    //Setup for rotary switch
+    estimatorPointer = this;
+    button.setClickHandler(globalButtonHandler);
+    button.setLongClickHandler(globalButtonHandler);
+    button.setDoubleClickHandler(globalButtonHandler);
+    button.setTripleClickHandler(globalButtonHandler);
+    rotary.setLeftRotationHandler(globalRotaryHandler);
+    rotary.setRightRotationHandler(globalRotaryHandler);
+    setLongClickTime(LONG_CLICK_TIME);
+    setStepsPerClick(DEFAULT_STEPS_PER_CLICK); //This could be different for different hardware
+
+    Serial.println(F("Rotary Switch setup ok."));
+
     Serial.print("Initializing Loadcell using ");
     Serial.println(setting.calValue);
 
     loadcell.begin();
     loadcell.start(stabilizingTime, true);
     loadcell.setCalFactor(setting.calValue);
-    tare();
+    //tare();
+    loadcell.setTareOffset(setting.tareOffset);
 
     //WiFi related
     //Disable esp8266 wifi auto connection. Connection behavior is controlled by code and user.
     WiFi.setAutoConnect(false);
     WiFi.setAutoReconnect(false);
 
-    Serial.println("Setup completed.");
+    //update related
+    githubVersion.reserve(githubVersionSize); //reserve a fixed lenght for version tag, such as "11.22.33"
+    _updateURL.reserve(_updateURLSize);
+    setNextCheckCountdown();
+
+    Serial.println(F("Setup completed."));
 
     printingStatus = STATUS_BOOT;
     printingStatusString = "STATUS_BOOT";
     setPage(PAGE_HOME);
 
     //Enable WiFi according to user setting
-    setWifi(setting.servicesWiFi);
+    setWifi(setting.optionsWiFi);
 }
 void FILAMENT_ESTIMATOR::update(void)
 {
@@ -466,7 +419,15 @@ void FILAMENT_ESTIMATOR::update(void)
     }
     updateDetection();
 
-    checkCurrentPage();
+    if (setting.autoGithubUpdate == true)
+    {
+        updateAutoGithubCheck();
+    }
+
+    if (setting.optionsAutoHomepage == true)
+    {
+        checkCurrentPage();
+    }
 }
 void FILAMENT_ESTIMATOR::setWifi(bool value)
 {
@@ -493,7 +454,7 @@ void FILAMENT_ESTIMATOR::setWifi(bool value)
             displayPage(currentPage); //Refresh page for WIFI symbol change
         }
     }
-    globalPrintMemory("setWifi: ");
+    //globalPrintMemory("setWifi: ");
 }
 void FILAMENT_ESTIMATOR::updateWifi()
 {
@@ -594,19 +555,19 @@ void FILAMENT_ESTIMATOR::beginServices()
         Serial.println(F("WiFi not connected."));
         return;
     }
-    if (setting.servicesMDNS == true)
+    if (setting.optionsMDNS == true)
     {
         setMDNS(true);
     }
-    if (setting.servicesBLYNK == true)
+    if (setting.optionsBLYNK == true)
     {
         setBlynk(true);
     }
-    if (setting.servicesWebServer == true)
+    if (setting.optionsWebServer == true)
     {
         setWebServer(true);
     }
-    if (setting.servicesArduinoOTA == true)
+    if (setting.optionsArduinoOTA == true)
     {
         setArduinoOTA(true);
     }
@@ -680,7 +641,7 @@ void FILAMENT_ESTIMATOR::setMDNS(bool value)
             Serial.println(F("mDNS not started."));
         }
     } //turn off mDNS
-    globalPrintMemory("setMDNS: ");
+    //globalPrintMemory("setMDNS: ");
     return;
 }
 void FILAMENT_ESTIMATOR::installDynamicServiceQuery()
@@ -785,7 +746,7 @@ void FILAMENT_ESTIMATOR::setBlynk(bool value)
         }
     }
     displayPage(currentPage); //Refresh page for blynk symbol change
-    globalPrintMemory("setBlynk: ");
+    //globalPrintMemory("setBlynk: ");
 }
 void FILAMENT_ESTIMATOR::setWebServer(bool value)
 {
@@ -857,7 +818,7 @@ void FILAMENT_ESTIMATOR::setWebServer(bool value)
             Serial.println(F("Web Server already disabled."));
         }
     } //trun off web server
-    globalPrintMemory("setServer: ");
+    //globalPrintMemory("setServer: ");
     return;
 }
 void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
@@ -926,7 +887,22 @@ void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
             }
         } //(value == false) disable arduino OTA
     }     //WiFi connected and mDNS running:
-    globalPrintMemory("setArduinoOTA: ");
+    //globalPrintMemory("setArduinoOTA: ");
+}
+void FILAMENT_ESTIMATOR::setAutoHomepage(bool value)
+{
+    if (value == true) //turn on auto homepage
+    {
+        setting.optionsAutoHomepage = true;
+        returnToHomepageTimer = millis();
+        Serial.println(F("Auto homepage enabled."));
+    }
+    else //turn off auto homepage
+    {
+        setting.optionsAutoHomepage = false;
+        Serial.println(F("Auto homepage disabled."));
+    }
+    return;
 }
 void FILAMENT_ESTIMATOR::checkConnectionStatus()
 {
@@ -1009,6 +985,12 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case MENU_NOTIFICATION:
                 setPage(PAGE_NOTIFICATION);
                 break;
+            case MENU_FIRMWARE_UPDATE:
+                setPage(PAGE_FIRMWARE_UPDATE);
+                break;
+            case MENU_OPTIONS:
+                setPage(PAGE_OPTIONS);
+                break;
             case MENU_DEBUG:
                 setPage(PAGE_DEBUG);
                 break;
@@ -1067,6 +1049,11 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 calibrateEditDigitMode = false;
                 //Reset the selection to the fourth digit, for next entry
                 calibrateSelection = CALIBRATE_4_DIGIT;
+                if (getCalibrationWeight() != setting.calibrationWeight)
+                {
+                    setting.calibrationWeight = getCalibrationWeight();
+                    saveToEEPROM(); //store the newly selected calibration weight
+                }
                 calibrate();
                 setPage(PAGE_CALIBRATE_CONFIRM);
                 break;
@@ -1074,6 +1061,11 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 calibrateEditDigitMode = false;
                 //Reset the selection to the fourth digit, for next entry
                 calibrateSelection = CALIBRATE_4_DIGIT;
+                if (getCalibrationWeight() != setting.calibrationWeight)
+                {
+                    setting.calibrationWeight = getCalibrationWeight();
+                    saveToEEPROM(); //store the newly selected calibration weight
+                }
                 setPage(PAGE_MENU);
                 break;
             }
@@ -1162,7 +1154,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                         hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
                         Serial.print("Reset hostname to: ");
                         Serial.println(hostname);
-                        setMDNS(setting.servicesMDNS); //change hostname if mDNS is enabled
+                        setMDNS(setting.optionsMDNS); //change hostname if mDNS is enabled
                     }
                 }
 
@@ -1274,6 +1266,108 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             break; //case PAGE_NOTIFICATION:
         }
+        case PAGE_FIRMWARE_UPDATE:
+        {
+            switch (updateMenuSelection)
+            {
+            case FIRMWARE_UPDATE_MENU_CHECK_NOW:
+            {
+                checkGithubLatestRelease(true, false);
+                displayPage(currentPage);
+                break;
+            }
+            case FIRMWARE_UPDATE_MENU_UPDATE_NOW:
+            {
+                checkGithubLatestRelease(false, true);
+                displayPage(currentPage);
+                break;
+            }
+            case FIRMWARE_UPDATE_MENU_AUTO_UPDATE:
+            {
+                setting.autoGithubUpdate = !setting.autoGithubUpdate;
+                Serial.print(F("Auto Github Update set to: "));
+                Serial.println((setting.autoGithubUpdate == true) ? "On" : "Off");
+                saveToEEPROM();
+                if (setting.autoGithubUpdate == true)
+                {
+                    //reset nextCheckCountdown whenever autoGithubUpdate set to on
+                    setNextCheckCountdown();
+                }
+                displayPage(currentPage);
+                break;
+            }
+            case FIRMWARE_UPDATE_MENU_RETURN_TO_MENU:
+            {
+                updateMenuSelection = FIRMWARE_UPDATE_MENU_CHECK_NOW;
+                updateMenuItemStartIndex = FIRMWARE_UPDATE_MENU_CHECK_NOW;
+                setPage(PAGE_MENU);
+                break;
+            }
+
+            default:
+                break;
+            }      //switch (notificationMenuSelection)
+            break; //case PAGE_FIRMWARE_UPDATE:
+        }
+        case PAGE_OPTIONS:
+        {
+            switch (optionsMenuSelection)
+            {
+            case OPTIONS_MENU_WIFI:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(OPTIONS_MENU_WIFI, !getOptionsSetting(OPTIONS_MENU_WIFI));
+                displayPage(PAGE_OPTIONS);
+                setWifi(getOptionsSetting(OPTIONS_MENU_WIFI)); //turn WiFi on or off
+                break;
+            }
+            case OPTIONS_MENU_MDNS:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                displayPage(PAGE_OPTIONS);
+                setMDNS(getOptionsSetting(OPTIONS_MENU_MDNS)); //turn mDNS on or off
+                break;
+            }
+            case OPTIONS_MENU_BLYNK:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                displayPage(PAGE_OPTIONS);
+                setBlynk(getOptionsSetting(OPTIONS_MENU_BLYNK)); //turn blynk on or off
+                break;
+            }
+            case OPTIONS_MENU_WEB_SERVER:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                displayPage(PAGE_OPTIONS);
+                setWebServer(getOptionsSetting(OPTIONS_MENU_WEB_SERVER)); //turn web server on or off
+                break;
+            }
+            case OPTIONS_MENU_ARDUINO_OTA:
+            { //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                setArduinoOTA(getOptionsSetting(OPTIONS_MENU_ARDUINO_OTA)); //turn arduino OTA on or off
+                displayPage(PAGE_OPTIONS);
+                break;
+            }
+            case OPTIONS_MENU_AUTO_HOMEPAGE:
+            { //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                setAutoHomepage(getOptionsSetting(OPTIONS_MENU_AUTO_HOMEPAGE)); //turn arduino OTA on or off
+                displayPage(PAGE_OPTIONS);
+                break;
+            }
+            case OPTIONS_MENU_RETURN:
+                optionsMenuSelection = OPTIONS_MENU_WIFI;
+                optionsMenuItemStartIndex = OPTIONS_MENU_WIFI;
+                setPage(PAGE_MENU);
+                break;
+            }
+
+            break;
+        }
         case PAGE_DEBUG:
             switch (debugMenuSelection)
             {
@@ -1346,14 +1440,17 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 //drawOverlay("Print", "Spooders", 1000);
                 printSpoodersDataset();
                 break;
-            case DEBUG_CHECK_GITHUB_TAG:
-                checkGithubTag();
+            case DEBUG_CHECK_GITHUB_VERSION:
+                checkGithubLatestRelease(true, false);
+                break;
+            case DEBUG_UPDATE_FROM_GITHUB:
+                checkGithubLatestRelease(false, true);
                 break;
             case DEBUG_PRINT_MEMORY:
                 globalPrintMemory("Debug print memory:");
                 break;
             case DEBUG_SERVICES:
-                setPage(PAGE_DEBUG_SERVICES);
+
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -1364,71 +1461,26 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             break;
         case PAGE_DEBUG_SERVICES:
         {
-            switch (servicesMenuSelection)
-            {
-            case SERVICES_MENU_WIFI:
-            {
-                //Toogle the selected settings
-                setServicesSetting(SERVICES_MENU_WIFI, !getServicesSetting(SERVICES_MENU_WIFI));
-                displayPage(PAGE_DEBUG_SERVICES);
-                setWifi(getServicesSetting(SERVICES_MENU_WIFI)); //turn WiFi on or off
-                break;
-            }
-            case SERVICES_MENU_MDNS:
-            {
-                //Toogle the selected settings
-                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
-                displayPage(PAGE_DEBUG_SERVICES);
-                setMDNS(getServicesSetting(SERVICES_MENU_MDNS)); //turn mDNS on or off
-                break;
-            }
-            case SERVICES_MENU_BLYNK:
-            {
-                //Toogle the selected settings
-                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
-                displayPage(PAGE_DEBUG_SERVICES);
-                setBlynk(getServicesSetting(SERVICES_MENU_BLYNK)); //turn blynk on or off
-                break;
-            }
-            case SERVICES_MENU_WEB_SERVER:
-            {
-                //Toogle the selected settings
-                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
-                displayPage(PAGE_DEBUG_SERVICES);
-                setWebServer(getServicesSetting(SERVICES_MENU_WEB_SERVER)); //turn web server on or off
-                break;
-            }
-            case SERVICES_MENU_ARDUINO_OTA:
-            { //Toogle the selected settings
-                setServicesSetting(servicesMenuSelection, !getServicesSetting(servicesMenuSelection));
-                setArduinoOTA(getServicesSetting(SERVICES_MENU_ARDUINO_OTA)); //turn arduino OTA on or off
-                displayPage(PAGE_DEBUG_SERVICES);
-                break;
-            }
-
-            case SERVICES_MENU_RETURN:
-                servicesMenuSelection = SERVICES_MENU_WIFI;
-                servicesMenuItemStartIndex = SERVICES_MENU_WIFI;
-                setPage(PAGE_DEBUG);
-                break;
-            }
             break; //case PAGE_DEBUG_SERVICES:
         }
         }
         break; //case SINGLE_CLICK:
     case DOUBLE_CLICK:
+    {
 
-        break;
-    case TRIPLE_CLICK:
-
-        break;
-    case LONG_CLICK:
-        if (currentPage == PAGE_HOME)
-        {
-            tare();
-        }
         break;
     }
+
+    case TRIPLE_CLICK:
+    {
+
+        break;
+    }
+    case LONG_CLICK:
+    {
+        break;
+    }
+    } //switch (btn.getClickType())
     returnToHomepageTimer = millis();
 }
 void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
@@ -1701,6 +1753,32 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 
             break;
         }
+        case PAGE_FIRMWARE_UPDATE:
+        {
+            if (updateMenuSelection > FIRMWARE_UPDATE_MENU_CHECK_NOW)
+            {
+                updateMenuSelection--;
+                if (updateMenuSelection < updateMenuItemStartIndex)
+                {
+                    updateMenuItemStartIndex--;
+                }
+                setPage(PAGE_FIRMWARE_UPDATE);
+            }
+            break;
+        }
+        case PAGE_OPTIONS:
+        {
+            if (optionsMenuSelection > OPTIONS_MENU_WIFI)
+            {
+                optionsMenuSelection--;
+                if (optionsMenuSelection < optionsMenuItemStartIndex)
+                {
+                    optionsMenuItemStartIndex--;
+                }
+                displayPage(PAGE_OPTIONS);
+            }
+            break;
+        }
         case PAGE_DEBUG:
         {
             if (debugMenuSelection > DEBUG_LOAD_TO_SETTING)
@@ -1717,15 +1795,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
         }
         case PAGE_DEBUG_SERVICES:
         {
-            if (servicesMenuSelection > SERVICES_MENU_WIFI)
-            {
-                servicesMenuSelection--;
-                if (servicesMenuSelection < servicesMenuItemStartIndex)
-                {
-                    servicesMenuItemStartIndex--;
-                }
-                setPage(PAGE_DEBUG_SERVICES);
-            }
+
             break;
         }
 
@@ -2009,6 +2079,32 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             }
             break;
         }
+        case PAGE_FIRMWARE_UPDATE:
+        {
+            if (updateMenuSelection < (numberOfUpdateMenuItems - 1))
+            {
+                updateMenuSelection++;
+                if (updateMenuSelection >= updateMenuItemStartIndex + updateMenuItemPerPage)
+                {
+                    updateMenuItemStartIndex++;
+                }
+                setPage(PAGE_FIRMWARE_UPDATE);
+            }
+            break;
+        }
+        case PAGE_OPTIONS:
+        {
+            if (optionsMenuSelection < (numberOfOptionsMenuItems - 1))
+            {
+                optionsMenuSelection++;
+                if (optionsMenuSelection >= optionsMenuItemStartIndex + optionsMenuItemPerPage)
+                {
+                    optionsMenuItemStartIndex++;
+                }
+                displayPage(PAGE_OPTIONS);
+            }
+            break;
+        }
         case PAGE_DEBUG:
         {
             if (debugMenuSelection < (numberOfDebugMenuItems - 1))
@@ -2024,15 +2120,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
         }
         case PAGE_DEBUG_SERVICES:
         {
-            if (servicesMenuSelection < (numberOfServicesMenuItems - 1))
-            {
-                servicesMenuSelection++;
-                if (servicesMenuSelection >= servicesMenuItemStartIndex + servicesMenuItemPerPage)
-                {
-                    servicesMenuItemStartIndex++;
-                }
-                setPage(PAGE_DEBUG_SERVICES);
-            }
+
             break;
         }
 
@@ -2232,7 +2320,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.drawString(6, 12, "Remove spool and press ");
-        display.drawString(6, 22, "button to tare:");
+        display.drawString(6, 22, "button to tare and save:");
         display.drawString(40, 36, "Ok");
         display.drawString(40, 46, "Cancel");
 
@@ -2651,6 +2739,84 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawDisplay();
         break;
     }
+    case PAGE_FIRMWARE_UPDATE:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Firmware Update");
+        display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.drawString(6, 12, "Current Version:");
+        display.drawString(86, 12, CURRENT_VERSION);
+        display.drawString(6, 22, "Github Version:");
+        display.drawString(86, 22, githubVersion);
+
+        display.drawString(6, 32, updateMenuTitle[updateMenuItemStartIndex]);
+        display.drawString(6, 42, updateMenuTitle[updateMenuItemStartIndex + 1]);
+        display.drawString(6, 52, updateMenuTitle[updateMenuItemStartIndex + 2]);
+
+        //display auto update setting
+        if (updateMenuItemStartIndex >= 0 && updateMenuItemStartIndex <= 2)
+        {
+            uint8_t autoUpdateRow = 2 - updateMenuItemStartIndex;
+            display.drawString(100, 32 + autoUpdateRow * 10, setting.autoGithubUpdate == true ? "On" : "    Off");
+        }
+
+        //display next check countdown
+        if (updateMenuItemStartIndex >= 1 && updateMenuItemStartIndex <= 3)
+        {
+            uint8_t autoUpdateRow = 3 - updateMenuItemStartIndex;
+            uint16_t ctMin;
+            if (nextCheckTimeMillis > millis())
+            {
+                ctMin = (nextCheckTimeMillis - millis()) / 60000;
+            }
+            else
+            {
+                ctMin = 0;
+            }
+            if (setting.autoGithubUpdate == true)
+            {
+                display.drawString(80, 32 + autoUpdateRow * 10, String(ctMin));
+                display.drawString(108, 32 + autoUpdateRow * 10, "Min.");
+            }
+        }
+
+        drawLeftIndicator(updateMenuSelection - updateMenuItemStartIndex + 2);
+        drawDisplay();
+        break;
+    }
+    case PAGE_OPTIONS:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, "Options");
+        display.drawRect(0, 12, 128, 1);
+
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        display.drawString(6, 12, optionsMenuTitle[optionsMenuItemStartIndex]);
+        display.drawString(100, 12, (getOptionsSetting(optionsMenuItemStartIndex) == true) ? "On" : "    Off");
+        display.drawString(6, 22, optionsMenuTitle[optionsMenuItemStartIndex + 1]);
+        display.drawString(100, 22, (getOptionsSetting(optionsMenuItemStartIndex + 1) == true) ? "On" : "    Off");
+        display.drawString(6, 32, optionsMenuTitle[optionsMenuItemStartIndex + 2]);
+        display.drawString(100, 32, (getOptionsSetting(optionsMenuItemStartIndex + 2) == true) ? "On" : "    Off");
+        display.drawString(6, 42, optionsMenuTitle[optionsMenuItemStartIndex + 3]);
+        display.drawString(100, 42, (getOptionsSetting(optionsMenuItemStartIndex + 3) == true) ? "On" : "    Off");
+        display.drawString(6, 52, optionsMenuTitle[optionsMenuItemStartIndex + 4]);
+        if (optionsMenuItemStartIndex + 4 != OPTIONS_MENU_RETURN)
+        {
+            display.drawString(100, 52, (getOptionsSetting(optionsMenuItemStartIndex + 4) == true) ? "On" : "    Off");
+        }
+
+        drawLeftIndicator(optionsMenuSelection - optionsMenuItemStartIndex);
+        drawDisplay();
+
+        break;
+    }
     case PAGE_DEBUG:
     {
         display.clear();
@@ -2672,30 +2838,6 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
     }
     case PAGE_DEBUG_SERVICES:
     {
-        display.clear();
-        display.setFont(ArialMT_Plain_10);
-        display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "Services");
-        display.drawRect(0, 12, 128, 1);
-
-        display.setTextAlignment(TEXT_ALIGN_LEFT);
-
-        display.drawString(6, 12, servicesMenuTitle[servicesMenuItemStartIndex]);
-        display.drawString(100, 12, (getServicesSetting(servicesMenuItemStartIndex) == true) ? "On" : "    Off");
-        display.drawString(6, 22, servicesMenuTitle[servicesMenuItemStartIndex + 1]);
-        display.drawString(100, 22, (getServicesSetting(servicesMenuItemStartIndex + 1) == true) ? "On" : "    Off");
-        display.drawString(6, 32, servicesMenuTitle[servicesMenuItemStartIndex + 2]);
-        display.drawString(100, 32, (getServicesSetting(servicesMenuItemStartIndex + 2) == true) ? "On" : "    Off");
-        display.drawString(6, 42, servicesMenuTitle[servicesMenuItemStartIndex + 3]);
-        display.drawString(100, 42, (getServicesSetting(servicesMenuItemStartIndex + 3) == true) ? "On" : "    Off");
-        display.drawString(6, 52, servicesMenuTitle[servicesMenuItemStartIndex + 4]);
-        if (servicesMenuItemStartIndex + 4 != SERVICES_MENU_RETURN)
-        {
-            display.drawString(100, 52, (getServicesSetting(servicesMenuItemStartIndex + 4) == true) ? "On" : "    Off");
-        }
-
-        drawLeftIndicator(servicesMenuSelection - servicesMenuItemStartIndex);
-        drawDisplay();
         break;
     }
     default:
@@ -2826,9 +2968,20 @@ void FILAMENT_ESTIMATOR::drawSymbols()
 }
 void FILAMENT_ESTIMATOR::tare()
 {
-    loadcell.tareNoDelay();
-    drawOverlay("Tare", "", 1000);
     Serial.println("Tare");
+    drawOverlay("Tare", "", 1000);
+    loadcell.tare();
+    drawOverlay("Offset", "Saved", 1000);
+    //testing purpose
+    setting.tareOffset = loadcell.getTareOffset();
+    Serial.print(F("Tare offset: "));
+    Serial.print(setting.tareOffset);
+    Serial.println(F(" saved to EEPROM."));
+    saveToEEPROM();
+    printingStatus = STATUS_IDLE;
+    printingStatusString = "STATUS_IDLE";
+    Serial.println(F("Status changed to STATUS_IDLE after tare."));
+    purgeCounter = 3; //purge array after few samples
 }
 void FILAMENT_ESTIMATOR::calibrate()
 {
@@ -2843,11 +2996,11 @@ void FILAMENT_ESTIMATOR::calibrate()
     drawDisplay();
     //refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
-    calibrationWeight = getCalibrationWeight();
+    setting.calibrationWeight = getCalibrationWeight();
     Serial.print("Calibration weight = ");
-    Serial.println(calibrationWeight);
+    Serial.println(setting.calibrationWeight);
     //get the new calibration value
-    newCalibrationValue = loadcell.getNewCalibration(calibrationWeight);
+    newCalibrationValue = loadcell.getNewCalibration(setting.calibrationWeight);
     Serial.print("New calibration value = ");
     Serial.println(newCalibrationValue);
     Serial.println("Calibrate completed.");
@@ -3054,6 +3207,13 @@ void FILAMENT_ESTIMATOR::loadToSetting()
         Serial.println(F("Invalid spooder ID in EEPROM."));
         break;
     }
+
+    //handles newly added calibrationWeight to settings
+    if (setting.calibrationWeightIsValid != 253) //arbitury value
+    {
+        setting.calibrationWeightIsValid = 253;
+        setting.calibrationWeight = DEFAULT_CALIBRATION_WEIGHT;
+    }
 }
 void FILAMENT_ESTIMATOR::saveToEEPROM()
 {
@@ -3108,16 +3268,25 @@ void FILAMENT_ESTIMATOR::dumpSetting()
 
     Serial.print(F("  - notifyOnTangled: "));
     Serial.println(setting.notifyOnTangled);
-    Serial.print(F("  - servicesWiFi: "));
-    Serial.println(setting.servicesWiFi);
-    Serial.print(F("  - servicesMDNS: "));
-    Serial.println(setting.servicesMDNS);
-    Serial.print(F("  - servicesBLYNK: "));
-    Serial.println(setting.servicesBLYNK);
-    Serial.print(F("  - servicesWebServer: "));
-    Serial.println(setting.servicesWebServer);
-    Serial.print(F("  - servicesArduinoOTA: "));
-    Serial.println(setting.servicesArduinoOTA);
+    Serial.print(F("  - optionsWiFi: "));
+    Serial.println(setting.optionsWiFi);
+    Serial.print(F("  - optionsMDNS: "));
+    Serial.println(setting.optionsMDNS);
+    Serial.print(F("  - optionsBLYNK: "));
+    Serial.println(setting.optionsBLYNK);
+    Serial.print(F("  - optionsWebServer: "));
+    Serial.println(setting.optionsWebServer);
+    Serial.print(F("  - optionsArduinoOTA: "));
+    Serial.println(setting.optionsArduinoOTA);
+    Serial.print(F("  - optionsAutoHomepage: "));
+    Serial.println(setting.optionsAutoHomepage);
+
+    Serial.print(F("  - autoGithubUpdate: "));
+    Serial.println(setting.autoGithubUpdate);
+    Serial.print(F("  - tareOffset: "));
+    Serial.println(setting.tareOffset);
+    Serial.print(F("  - automaticUpdateJustPerformed: "));
+    Serial.println(setting.automaticUpdateJustPerformed);
 
     Serial.println(F("Setting dump completed."));
 }
@@ -3126,7 +3295,7 @@ void FILAMENT_ESTIMATOR::dumpEEPROM()
     Serial.println(F("Dump EEPROM data:"));
     for (uint16_t addr = 0; addr < DECLARED_EEPROM_SIZE; addr++)
     {
-        if (addr % 64 == 0)
+        if (addr % 32 == 0)
         {
             Serial.println("");
             Serial.print("[");
@@ -3366,15 +3535,17 @@ void FILAMENT_ESTIMATOR::loadConfig()
 
     deserializeJson(jsonDoc, configFile);
 
-    strlcpy(config_version, jsonDoc["config_version"] | "", 16);
-    strlcpy(wifi_ssid, jsonDoc["wifi_ssid"] | "", 32);
-    strlcpy(wifi_password, jsonDoc["wifi_password"] | "", 63);
-    strlcpy(blynk_auth, jsonDoc["blynk_auth"] | "", 32);
+    configFile.close();
+
+    strcpy(config_version, jsonDoc["config_version"]);
+    strcpy(wifi_ssid, jsonDoc["wifi_ssid"]);
+    strcpy(wifi_password, jsonDoc["wifi_password"]);
+    strcpy(blynk_auth, jsonDoc["blynk_auth"]);
 
     uint8_t index = 0;
     for (JsonObject elem : jsonDoc["spool_holder"].as<JsonArray>())
     {
-        strlcpy(spoolHolderSlotName[index], elem["name"] | "", 12);
+        strcpy(spoolHolderSlotName[index], elem["name"]);
         //spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
         spoolHolderSlotWeight[index] = elem["weight"]; // 180, 150, 250, 250, 250
         index++;
@@ -3383,36 +3554,53 @@ void FILAMENT_ESTIMATOR::loadConfig()
 
     Serial.print(F("Config file version "));
     Serial.print(config_version);
-
     Serial.println(F(" loaded."));
+
+    //handles config file version update from 0.3.0 to 0.7.0
+    /*
+    if (jsonDoc["config_version"] == "0.3.0")
+    {
+        Serial.println(F("Config file is old version."));
+        //handles config file version update to 0.7.0
+
+        //if (!jsonDoc.containsKey("calibration_weight"))
+        //{
+        //    jsonDoc["calibration_weight"] = DEFAULT_CALIBRATION_WEIGHT;
+        //}
+
+        //if (!jsonDoc.containsKey("steps_per_click"))
+        //{
+        //jsonDoc["steps_per_click"] = DEFAULT_STEPS_PER_CLICK;
+        //}
+
+        File configFile = LittleFS.open("/config.json", "w"); //re-open the config file in write mode
+        serializeJson(jsonDoc, configFile);
+        Serial.println(F("Config file updated."));
+    }
+    */
 }
 void FILAMENT_ESTIMATOR::dumpConfig()
 {
-    Serial.println(F("Dump config:"));
-    //Serial.println(F("Serialized jsonDoc content:"));
-    //serializeJson(jsonDoc, Serial);
-    Serial.println();
-    Serial.println(F("Deserialized data:"));
-    Serial.print(F("config_version:"));
-    Serial.println(config_version);
-    Serial.print(F("wifi_ssid:"));
-    Serial.println(wifi_ssid);
-    Serial.print(F("wifi_password:"));
-    Serial.println(wifi_password);
-    Serial.print(F("blynk_auth:"));
-    Serial.println(blynk_auth);
-
-    for (uint8_t index = 0; index < spoolHolderSlotSize; index++)
+    Serial.println(F("Dump config file:"));
+    File configFile = LittleFS.open("/config.json", "r");
+    if (!configFile)
     {
-        Serial.print(F("name:"));
-        Serial.print(spoolHolderSlotName[index]);
-        Serial.print(F("  weight:"));
-        Serial.println(spoolHolderSlotWeight[index]);
-        index++;
+        Serial.println(F("Failed to open config file."));
+        return;
     }
-    Serial.print(F("spoolHolderSlotSize = "));
-    Serial.println(spoolHolderSlotSize);
-    Serial.println(F("Dump config completed."));
+    configSize = configFile.size();
+    if (configSize > JSON_DOC_BUFFER_SIZE)
+    {
+        Serial.println(F("Config file size is too large"));
+        return;
+    }
+
+    //Use local json buffer to free up memory after loading
+    DynamicJsonDocument jsonDoc(JSON_DOC_BUFFER_SIZE);
+
+    deserializeJson(jsonDoc, configFile);
+    serializeJsonPretty(jsonDoc, Serial); //output to Serial
+    Serial.println();
 }
 void FILAMENT_ESTIMATOR::replyOK()
 {
@@ -4040,6 +4228,25 @@ void FILAMENT_ESTIMATOR::updateDetection()
                 logFile.println(record);
             }
         }
+        else if (getMean(3) >= (setting.spoolHolderWeight - 50) && getStddev(3) < 0.5)
+        {
+            if (purgeCounter == 0)
+            {
+                //Do not change state during purge counting
+                printingStatus = STATUS_IDLE;
+                printingStatusString = "STATUS_IDLE";
+                Serial.println(F("Status changed from STATUS_BOOT to STATUS_IDLE."));
+                purgeCounter = 3; //purge array after few samples
+                if (isLogging == true)
+                {
+                    String record;
+                    record += (String)loggerCounter;
+                    record += ",";
+                    record += "Status changed from STATUS_BOOT to STATUS_IDLE.";
+                    logFile.println(record);
+                }
+            }
+        }
         break;
     case STATUS_EMPTY:
         if (getMean(3) >= (setting.spoolHolderWeight - 50) && getStddev(3) < 0.5)
@@ -4169,7 +4376,25 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     previousTotalWeight = totalWeight;
 
+    //auto github update related
+    if (setting.autoGithubUpdate == true)
+    {
+        if (nextCheckTimeMillis - millis() < 10 * 60000)
+        {
+            if (stddev3Count >= 10)
+            {
+                //increase countdown time to 10 minutes
+                //if there are some movements detected
+                nextCheckTimeMillis = millis() + 10 * 60000 + 5000;
+                //Serial.println(F("Auto github update countdown extended."));
+            }
+        }
+    }
+
     //globalPrintMemory(); //debug oom
+
+    //update page every second
+    displayPage(currentPage);
 
     detectionTimer = millis();
 }
@@ -4499,141 +4724,516 @@ void FILAMENT_ESTIMATOR::printSpoodersDataset()
     globalPrintSpoodersDataset();
     return;
 }
-void FILAMENT_ESTIMATOR::checkGithubTag()
+void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate)
 {
-    Serial.println(F("Checking github firmware version:"));
+
+    Serial.println(F("Checking github latest release version:"));
+    drawOverlay("Checking", "Github", 2000);
 
     if (WiFi.status() != WL_CONNECTED)
     {
-        Serial.println(F("checkGithubTag failed. WiFi not connected."));
+        Serial.println(F("WiFi not connected."));
+        drawOverlay("Failed", "", 2000);
         return;
     }
     if (LittleFS.begin())
     {
-        Serial.println("LittleFS ok.");
+        //Serial.println("LittleFS ok.");
         //listDir("");
     }
     else
     {
-        Serial.println("LittleFS failed.");
+        Serial.println(F("LittleFS failed."));
+        drawOverlay("Failed", "", 2000);
         return;
     }
+    if (netWorkTimeReceived == false)
+    {
+        Serial.println(F("Network time not configured."));
+        drawOverlay("Failed", "", 2000);
+        return;
+    }
+
     BearSSL::CertStore certStore;
     _certStore = &certStore;
     numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
-    Serial.print(F("Number of CA certs read: "));
-    Serial.println(numCerts);
+    //Serial.print(F("Number of CA certs read: "));
+    //Serial.println(numCerts);
     if (numCerts == 0)
     {
         Serial.println(F("No CA certs found. Unable to establish https connection."));
+        drawOverlay("Failed", "", 2000);
         return;
     }
-    globalPrintMemory("After certs read");
+    //globalPrintMemory("After certs read");          //about 36k left
     BearSSL::WiFiClientSecure client; //7k memory required
-    globalPrintMemory(F("After client creation."));
+    //globalPrintMemory(F("After client creation.")); //about 29k left
     client.setCertStore(_certStore);
 
-    if (!client.connect(_host, _port)) //22k memory required
+    //Try to reduce connection memory usage
+    //Checking MFLN support
+    bool MFLN_Support = client.probeMaxFragmentLength(githubHost, githubPort, 512);
+    if (MFLN_Support == true)
     {
-        Serial.println(F("Connection to gitgub failed"));
+        //Serial.println(F("MFLN 512 fragment length probing ok."));
+        client.setBufferSizes(512, 512);
+    }
+
+    if (!client.connect(githubHost, githubPort)) //22k memory required
+    {
+        Serial.println(F("Connection to gitgub failed."));
+        drawOverlay("Failed", "", 2000);
+        return;
+    }
+    else //connected ok
+    {
+        if (MFLN_Support == true)
+        {
+            if (client.getMFLNStatus())
+            {
+                //connection RAM usage reduced to 5.5k using 512 bytes MFLN
+                //Serial.println(F("MFLN 512 negotiation succeeded."));
+            }
+            else
+            {
+                Serial.println(F("MFLN 512 negotiation failed."));
+                drawOverlay("Failed", "", 2000);
+            }
+        }
+    }
+    //globalPrintMemory("After client connection"); //about 24k left
+
+    //Start to check github
+    String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest"; //has to use readStringUntil('\n'), otherwise buffer overflow result in nothing can be printed
+
+    if (forceCheck == true || githubUpdateAvailable == false)
+    {
+
+        //rate limit to 60 calls per hour
+        //fetch the X-RateLimit-Remaining value
+        client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                     "Host: " + githubHost + "\r\n" +
+                     "User-Agent: FuzzySpooder\r\n" +
+                     "Connection: close\r\n\r\n");
+        //fetch the http header
+        uint8_t limitRemaining = 0;
+        uint16_t contentLength = 0;
+        while (client.connected())
+        {
+            String response = client.readStringUntil('\n');
+            if (response == "\r")
+            {
+                break;
+            }
+            if (response.indexOf("X-RateLimit-Remaining:") == 0)
+            {
+                //response looks like this:
+                //X-RateLimit-Remaining: 56
+                String sub = response.substring(response.indexOf(" ") + 1);
+                limitRemaining = sub.toInt();
+                Serial.print(F("X-RateLimit-Remaining: "));
+                Serial.println(limitRemaining);
+            }
+            if (response.indexOf("Content-Length:") == 0)
+            {
+                //response looks like this:
+                //Content-Length: 3799
+                String sub = response.substring(response.indexOf(" ") + 1);
+                contentLength = sub.toInt();
+                //Serial.print(F("Content-Length: "));
+                //Serial.println(contentLength);
+            }
+        }
+        //Check RAM
+        if (ESP.getFreeHeap() > (contentLength + 2048))
+        {
+            //ok, with 2k reserve
+        }
+        else
+        {
+            Serial.print(F("Not enough memory to parse json doc."));
+            drawOverlay("Failed", "", 2000);
+            globalPrintMemory("");
+            return;
+        }
+        uint16_t capacity = contentLength + 2048; //https://arduinojson.org/v6/assistant/
+        DynamicJsonDocument doc(capacity);
+
+        //fetch the github release json doc
+        while (client.connected())
+        {
+            if (client.available())
+            {
+                DeserializationError error;
+                error = deserializeJson(doc, client.readStringUntil('\n')); //no RAM/speed difference using Stream or String
+                if (error != error.Ok)
+                {
+                    Serial.print(F("Deserialization error: "));
+                    drawOverlay("Failed", "", 2000);
+                    Serial.println(error.c_str());
+                    return;
+                }
+            }
+        }
+        //globalPrintMemory("After deserializeJson"); //18k using stream deserialization
+        //client.stop(); //increases 5k RAM
+        //globalPrintMemory("After client.stop()");   //23k left,
+
+        //print the content
+        //serializeJsonPretty(doc, Serial);
+        //Serial.println();
+
+        //globalPrintMemory("Before doc.containsKey('tag_name')"); //Heap: 18312    Block: 18128
+        //RAM release ok at this point
+
+        if (doc.containsKey("tag_name"))
+        {
+            String releaseTag = doc["tag_name"];
+            githubVersion = releaseTag; //Storing the String tag into global reserved variable
+            githubVersionObtained = true;
+
+            convertTagToVersion(releaseTag, &githubLatestReleaseVersion);
+            //Serial.print(F("Github version(string tag): "));
+            //Serial.println(releaseTag);
+
+            Serial.print(F("Github latest version: "));
+            printVersion(githubLatestReleaseVersion);
+
+            Serial.print(F("Current firmware version: "));
+            printVersion(currentVersion);
+            //bool isPrerelease = doc["prerelease"];
+            //Serial.print(F("Is prerelease: "));
+            //Serial.println(isPrerelease ? "Yes" : "No");
+            if (versionToNumber(githubLatestReleaseVersion) > versionToNumber(currentVersion))
+            {
+
+                JsonArray assets = doc["assets"];
+                for (auto asset : assets)
+                {
+                    const char *asset_type = asset["content_type"];
+                    const char *asset_name = asset["name"];
+                    const char *asset_url = asset["browser_download_url"];
+
+                    if (strcmp(asset_type, GHOTA_CONTENT_TYPE) == 0 && strcmp(asset_name, _binFile) == 0)
+                    {
+                        //firmware file found
+                        Serial.print(F("New version at: "));
+                        Serial.println(asset_url);
+                        _updateURL = asset_url;
+                        githubUpdateAvailable = true;
+                    }
+                    else
+                    {
+
+                        Serial.println(F("Firmware file not found."));
+                        githubUpdateAvailable = false;
+                        return;
+                    }
+                }
+            }
+            else //if (versionToNumber(githubLatestReleaseVersion) > versionToNumber(currentVersion))
+            {
+                //Serial.println(F("No new version available on github."));
+                githubUpdateAvailable = false;
+                //RAM release ok at this point.
+                return;
+            }
+        }
+        else //if (doc.containsKey("tag_name"))
+        {
+            Serial.println(F("No tag_name found."));
+            githubVersionObtained = false;
+            githubUpdateAvailable = false;
+            drawOverlay("Failed", "", 2000);
+            return;
+        }
+    } //if (forceCheck == true || githubUpdateAvailable == false)
+
+    //globalPrintMemory("After doc.containsKey('tag_name')"); //Heap: 23592    Block: 23168
+    //After checkGithubLatestRelease(): Heap: 35368    Block: 34768
+
+    //return; //Memory release ok at this point
+
+    //resolve redirects
+    //splitURL = _urlDetails(_updateURL); //Could be sourece of RAM fragmentation
+    //_updateURL requires some 513 bytes to hold the URL
+    //If used locally, spooder cannot perform seperated check/update operation.
+    //If used globally, need to reserved large enough RAM to prevent RAM fragmentation
+    //So String size 768 is used here.
+
+    String proto = "";
+    int port = 80;
+    if (_updateURL.startsWith("http://"))
+    {
+        proto = "http://";
+        _updateURL.replace("http://", "");
     }
     else
     {
+        proto = "https://";
+        port = 443;
+        _updateURL.replace("https://", "");
     }
-    globalPrintMemory("After client connection");
+    int firstSlash = _updateURL.indexOf('/');
+    String host = _updateURL.substring(0, firstSlash);
+    String path = _updateURL.substring(firstSlash);
 
-    /*String url = "/repos/";
-    url += _user;
-    url += "/";
-    url += _repo;
-    url += "/releases/latest";
-    */
-    //String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest";
-    String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/tags";
-    //String url = "/repos/yknivag/ESP_OTA_GitHub_Showcase/releases/latest";
-    //String url = "/repos/yknivag/ESP_OTA_GitHub_Showcase/tags";
-    Serial.print(F("Connection to: "));
-    Serial.println(url);
+    bool isFinalURL = false;
 
-    //rate limit to 60 calls per hour
-
-    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                 "Host: " + _host + "\r\n" +
-                 "User-Agent: ESP_OTA_GitHubArduinoLibrary\r\n" +
-                 "Connection: close\r\n\r\n");
-
-    while (client.connected())
+    while (!isFinalURL)
     {
-        String s = client.readString();
-        Serial.println(s);
-    }
-
-    /*
-    while (client.connected())
-    {
-        String response = client.readStringUntil('\n');
-        Serial.println(response);
-        if (response == "\r")
+        if (!client.connect(host, port))
         {
-            break;
+            Serial.println(F("Client connection Failed."));
+            return;
+        }
+
+        client.print(String("GET ") + path + " HTTP/1.1\r\n" +
+                     "Host: " + host + "\r\n" +
+                     "User-Agent: FuzzySpooder\r\n" +
+                     "Connection: close\r\n\r\n");
+
+        while (client.connected())
+        {
+            String response = client.readStringUntil('\n');
+            if (response.startsWith("location: ") || response.startsWith("Location: "))
+            {
+                isFinalURL = false;
+                String location = response;
+                if (response.startsWith("location: "))
+                {
+                    location.replace("location: ", "");
+                }
+                else
+                {
+                    location.replace("Location: ", "");
+                }
+                location.remove(location.length() - 1);
+
+                if (location.startsWith("http://") || location.startsWith("https://"))
+                {
+                    //absolute URL - separate host from path
+                    //urlDetails_t url = _urlDetails(location);
+
+                    int port = 80;
+                    if (location.startsWith("http://"))
+                    {
+                        proto = "http://";
+                        location.replace("http://", "");
+                    }
+                    else
+                    {
+                        proto = "https://";
+                        port = 443;
+                        location.replace("https://", "");
+                    }
+                    int firstSlash = location.indexOf('/');
+                    host = location.substring(0, firstSlash);
+                    path = location.substring(firstSlash);
+                }
+                else
+                {
+                    //relative URL - host is the same as before, location represents the new path.
+                    path = location;
+                }
+                //leave the while loop so we don't set isFinalURL on the next line of the header.
+                break;
+            }
+            else
+            {
+                //location header not present - this must not be a redirect. Treat this as the final address.
+                isFinalURL = true;
+            }
+            if (response == "\r")
+            {
+                break;
+            }
         }
     }
-    String response = client.readStringUntil('\n');
-    Serial.println(response);
+    if (isFinalURL)
+    {
+        String finalURL = proto + host + path;
+        _updateURL = finalURL; //Not the source of RAM fragment problem
+    }
+    else
+    {
+        Serial.println(F("URL unresolved."));
+        drawOverlay("Failed", "", 2000);
+        return;
+    }
+
+    //Serial.print(F("_updateURL = "));
+    //Serial.println(_updateURL);
+    /* _updateURL example: 515 bytes
+    _updateURL = https://github-releases.githubusercontent.com/347605015/
+    c6847f91-dac8-43b9-a55e-7bdae94af08f?X-Amz-Algorithm=AWS4-HMAC-SHA256&X
+    -Amz-Credential=AKIAIWNJYAX4CSVEH53A%2F20210829%2Fus-east-1%2Fs3%2Faws4
+    _request&X-Amz-Date=20210829T150643Z&X-Amz-Expires=300&X-Amz-Signature=
+    8286df8a22c44df7b53c6ad9e4747923bc8120459d11ad96c5f7085a51b30082&X-Amz-
+    SignedHeaders=host&actor_id=0&key_id=0&repo_id=347605015&response-content
+    -disposition=attachment%3B%20filename%3Dfirmware.bin&response-content-
+    type=application%2Foctet-stream
     */
 
-    globalPrintMemory("After printing last response");
+    //globalPrintMemory("Before update:"); //Heap: 21040    Block: 19640 (without update)
+    //return; //Heap: 34800    Block: 34472 if return here
+
+    //Do the update
+    if (githubUpdateAvailable == true && doUpdate == true)
+    {
+        ESP8266HTTPUpdate ESPhttpUpdate; //use local instance to free up RAM
+        Serial.println(F("Updating now..."));
+        drawOverlay("Updating", "Firmware", 5000);
+
+        //set flag for time extension
+        setting.automaticUpdateJustPerformed = true;
+        saveToEEPROM();
+
+        t_httpUpdate_return ret = ESPhttpUpdate.update(client, _updateURL);
+        switch (ret)
+        {
+        case HTTP_UPDATE_FAILED:
+            Serial.println(ESPhttpUpdate.getLastErrorString());
+            break;
+
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println(F("HTTP_UPDATE_NO_UPDATES"));
+            break;
+
+        case HTTP_UPDATE_OK:
+            Serial.println(F("HTTP_UPDATE_OK"));
+            break;
+        }
+
+        //if the program gets here, automatic update is not successful
+        //clear flag
+        setting.automaticUpdateJustPerformed = false;
+        saveToEEPROM();
+    }
+    drawOverlay("Done", "", 2000);
+    //globalPrintMemory("After update:"); //Heap: 21040    Block: 19640
+    return;
 }
-bool FILAMENT_ESTIMATOR::getServicesSetting(uint8_t selection)
+bool FILAMENT_ESTIMATOR::getOptionsSetting(uint8_t selection)
 {
     bool result = false;
     switch (selection)
     {
-    case SERVICES_MENU_WIFI:
-        result = setting.servicesWiFi;
+    case OPTIONS_MENU_WIFI:
+        result = setting.optionsWiFi;
         break;
-    case SERVICES_MENU_MDNS:
-        result = setting.servicesMDNS;
+    case OPTIONS_MENU_MDNS:
+        result = setting.optionsMDNS;
         break;
-    case SERVICES_MENU_BLYNK:
-        result = setting.servicesBLYNK;
+    case OPTIONS_MENU_BLYNK:
+        result = setting.optionsBLYNK;
         break;
-    case SERVICES_MENU_WEB_SERVER:
-        result = setting.servicesWebServer;
+    case OPTIONS_MENU_WEB_SERVER:
+        result = setting.optionsWebServer;
         break;
-    case SERVICES_MENU_ARDUINO_OTA:
-        result = setting.servicesArduinoOTA;
+    case OPTIONS_MENU_ARDUINO_OTA:
+        result = setting.optionsArduinoOTA;
         break;
-
+    case OPTIONS_MENU_AUTO_HOMEPAGE:
+        result = setting.optionsAutoHomepage;
+        break;
     default:
         break;
     }
     return result;
 }
-void FILAMENT_ESTIMATOR::setServicesSetting(uint8_t selection, bool value)
+void FILAMENT_ESTIMATOR::setOptionsSetting(uint8_t selection, bool value)
 {
     switch (selection)
     {
-    case SERVICES_MENU_WIFI:
-        setting.servicesWiFi = value;
+    case OPTIONS_MENU_WIFI:
+        setting.optionsWiFi = value;
         break;
-    case SERVICES_MENU_MDNS:
-        setting.servicesMDNS = value;
+    case OPTIONS_MENU_MDNS:
+        setting.optionsMDNS = value;
         break;
-    case SERVICES_MENU_BLYNK:
-        setting.servicesBLYNK = value;
+    case OPTIONS_MENU_BLYNK:
+        setting.optionsBLYNK = value;
         break;
-    case SERVICES_MENU_WEB_SERVER:
-        setting.servicesWebServer = value;
+    case OPTIONS_MENU_WEB_SERVER:
+        setting.optionsWebServer = value;
         break;
-    case SERVICES_MENU_ARDUINO_OTA:
-        setting.servicesArduinoOTA = value;
+    case OPTIONS_MENU_ARDUINO_OTA:
+        setting.optionsArduinoOTA = value;
+        break;
+    case OPTIONS_MENU_AUTO_HOMEPAGE:
+        setting.optionsAutoHomepage = value;
         break;
     default:
         break;
     }
-    Serial.print(servicesMenuTitle[selection]);
+    Serial.print(optionsMenuTitle[selection]);
     Serial.print(F(" set to: "));
     Serial.println((value == true) ? "On" : "Off");
     saveToEEPROM();
+}
+bool FILAMENT_ESTIMATOR::versionTagIsValid(VERSION_STRUCT v)
+{
+    return true;
+}
+bool FILAMENT_ESTIMATOR::convertTagToVersion(String t, VERSION_STRUCT *v)
+{
+    int8_t firstDotIndex = t.indexOf(".");
+    int8_t secondDotIndex = t.lastIndexOf(".");
+    //simple check if the tag is valid, should contain two '.' at different places
+    if (firstDotIndex == -1 || secondDotIndex == -1)
+    {
+        return false;
+    }
+    if (firstDotIndex == 0 || secondDotIndex == t.length() - 1 || secondDotIndex - firstDotIndex <= 1)
+    {
+        return false;
+    }
+    v->major = t.substring(0, firstDotIndex).toInt();
+    v->minor = t.substring(firstDotIndex + 1, secondDotIndex).toInt();
+    v->patch = t.substring(secondDotIndex + 1).toInt();
+    return true; //tag passes simple check
+}
+void FILAMENT_ESTIMATOR::printVersion(VERSION_STRUCT v)
+{
+    Serial.print(v.major);
+    Serial.print(".");
+    Serial.print(v.minor);
+    Serial.print(".");
+    Serial.print(v.patch);
+    Serial.println();
+}
+void FILAMENT_ESTIMATOR::saveGitgubFileToFs()
+{
+    Serial.println(F("Save github file to FS:"));
+    return;
+}
+void FILAMENT_ESTIMATOR::setNextCheckCountdown()
+{
+    nextCheckTimeMillis = millis() + random(60 * 60000, 120 * 60000); //60~120 min in ms
+    //nextCheckTimeMillis = millis() + 2 * 60000;
+    if (setting.automaticUpdateJustPerformed == true)
+    {
+        //just performed an automatic update, increase next check count down
+        setting.automaticUpdateJustPerformed = false;
+        saveToEEPROM();
+        nextCheckTimeMillis += random(120 * 60000, 240 * 60000);
+    }
+}
+void FILAMENT_ESTIMATOR::updateAutoGithubCheck()
+{
+    if (millis() - updateAutoGithubCheckTimer < UPDATE_AUTO_GITHUB_CHECK_PEROID)
+    {
+        return;
+    }
+
+    //less than one minute
+    if (nextCheckTimeMillis - millis() < 60000)
+    {
+        //check version on GitHub and update firmware if new version is available
+        checkGithubLatestRelease(true, true);
+        setNextCheckCountdown(); //in case of update firmware failure
+    }
+
+    updateAutoGithubCheckTimer = millis();
 }

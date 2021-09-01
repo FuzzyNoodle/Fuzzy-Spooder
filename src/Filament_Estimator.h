@@ -9,11 +9,8 @@
 #ifndef FILAMENT_ESTIMATOR_H
 #define FILAMENT_ESTIMATOR_H
 
-//#version for this firmware
-#define CURRENT_VERSION_MAJOR 0
-#define CURRENT_VERSION_MINOR 6
-#define CURRENT_VERSION_PATCH 5
-#define CURRENT_VERSION "0.6.5"
+//Version for this firmware
+#define CURRENT_VERSION "1.0.0"
 
 #include "Arduino.h"
 #include <ESP8266WebServer.h>
@@ -30,6 +27,7 @@
 #define ROTARY_PIN_DT D4
 #define DEFAULT_STEPS_PER_CLICK 4
 #define BUTTON_PIN D0
+#define LONG_CLICK_TIME 400
 
 //Include the SSD1306 display library for esp8266
 #include "SSD1306Wire.h"
@@ -40,6 +38,7 @@
 //Include the HX711 library
 #include "HX711_ADC.h"
 #include <EEPROM.h>
+//#include <ESP_EEPROM.h>   //use this library to extend life
 #define HX711_DOUT_PIN D5 //mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  //mcu > HX711 sck pin
 
@@ -70,8 +69,8 @@
 #include <math.h>
 #define DETECTION_SAMPLE_SIZE 30
 
-#define DEFAULT_SPOOL_HOLDER_WEIGHT 180
-#define DEFAULT_TOTAL_WEIGHT 1180
+#define DEFAULT_SPOOL_HOLDER_WEIGHT 255
+#define DEFAULT_CALIBRATION_WEIGHT 1284
 #define DEFAULT_CALIBRATION_VALUE 250.0
 
 #define WIFI_STATUS_DISABLED 0
@@ -138,17 +137,13 @@
 #define NOTIFICATION_MENU_TANGLED 5
 #define NOTIFICATION_MENU_RETURN 6
 
-#define MENU_TARE 0
-#define MENU_CALIBRATE 1
-#define MENU_SPOOL_HOLDER_WEIGHT 2
-#define MENU_SET_SPOODER_ID 3
-#define MENU_LOW_FILAMENT_SETUP 4
-#define MENU_NOTIFICATION 5
-#define MENU_DEBUG 8
+#define PAGE_FIRMWARE_UPDATE 80
 
-#define PAGE_DEBUG_SERVICES 80
+#define PAGE_OPTIONS 90
 
-#define DECLARED_EEPROM_SIZE 1024
+#define PAGE_DEBUG_SERVICES 100
+
+#define DECLARED_EEPROM_SIZE 64
 #define EEPROM_START_ADDRESS 0
 
 #define DISPLAY_TYPE_TOTAL 0
@@ -169,6 +164,15 @@
 #include <ESP8266mDNS.h>
 
 //Github auto update
+#define NO_GLOBAL_HTTPUPDATE //use local instance to free up RAM
+#include <ESP8266httpUpdate.h>
+typedef struct urlDetails_t
+{
+  String proto;
+  String host;
+  int port;
+  String path;
+};
 // A single, global CertStore which can be used by all
 // connections.  Needs to stay live the entire time any of
 // the WiFiClientBearSSLs are present.
@@ -202,6 +206,133 @@ public:
   void buttonHandler(Button2 &btn);
   void rotaryHandler(ESPRotary &rty);
 
+  //made public due to using callback function in class, requires an outside-class function
+  void handleStatus();     //Return the FS type, status and size info
+  void handleFileList();   //Return the list of files in the directory specified by the "dir" query string parameter. Also demonstrates the use of chuncked responses.
+  void handleGetEdit();    //This specific handler returns the index.htm from the /edit folder.
+  void handleFileCreate(); //Handle the creation/rename of a new file
+  void handleFileDelete(); //Handle a file deletion request
+  void handleFileUpload(); //Handle a file upload request
+  void handleNotFound();   //The "Not Found" handler
+  void replyOK();
+
+  void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
+
+private:
+  //ESP8266WebServer server;
+  Button2 button;
+  ESPRotary rotary;
+  SSD1306Wire display;
+
+  struct VERSION_STRUCT
+  {
+    uint8_t major; //incompatible API changes
+    uint8_t minor; //add functionality in a backwards compatible manner
+    uint8_t patch; //make backwards compatible bug fixes
+  };
+  VERSION_STRUCT currentVersion;
+  VERSION_STRUCT githubLatestReleaseVersion;
+
+  //struct used to interact with eeprom, without the hasstle of address and lengths
+  struct EEPROM_SETTING_STRUCT
+  {
+    VERSION_STRUCT version;
+    float calValue;
+    uint16_t spoolHolderWeight;
+    byte spooderIDSetStatus;
+    uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
+    uint8_t spooderIDNumber; //1 - 99
+    uint16_t lowFilamentThreshold;
+    uint8_t notifyOnPrintStarted;
+    uint8_t notifyOnPrintCompleted;
+    uint8_t notifyOnLowFilament;
+    uint8_t notifyOnFallOffRack;
+    uint8_t notifyOnFallOffBearing;
+    uint8_t notifyOnTangled;
+    uint8_t optionsWiFi;
+    uint8_t optionsMDNS;
+    uint8_t optionsBLYNK;
+    uint8_t optionsWebServer;
+    uint8_t optionsArduinoOTA;
+    uint8_t autoGithubUpdate;
+    long tareOffset; //using 32 bytes here
+    uint16_t calibrationWeight;
+    uint8_t calibrationWeightIsValid;
+    uint8_t automaticUpdateJustPerformed;
+    uint8_t optionsAutoHomepage;
+
+  } setting;
+
+  //Network related
+  bool enableWifi = false;
+  uint8_t wifiStatus = WIFI_STATUS_BOOT;
+  bool enableBlynk = false;
+  bool enableWebServer = false;
+  bool enableArduinoOTA = false;
+  bool enableNetworkTime = true;
+  void updateWifi();
+  void connectWifi();
+  void beginServices();
+  void setMDNS(bool value);
+  void setBlynk(bool value);
+  void setWebServer(bool value);
+  void setArduinoOTA(bool value);
+  void setAutoHomepage(bool value);
+  ArduinoOTAClass *ArduinoOTA; //use pointer to creat/delete object in code
+  ESP8266WebServer *webServer; //use pointer to creat/delete object in code
+  void installDynamicServiceQuery();
+  bool netWorkTimeReceived = false;
+  void updateNetworkTime();
+  uint32_t updateNetworkTimeTimer;
+  uint32_t UPDATE_NETWORK_TIME_PERIOD = 1000;
+
+  struct SPOODERS_DATASET_STRUCT
+  {
+    char hostname[10];
+    IPAddress ip;
+    int16_t fw; //filament weight in gram
+  } dataset[20];
+
+  uint8_t currentPage = PAGE_NONE;
+  uint8_t previousPage = PAGE_NONE;
+  bool setPage(uint8_t page); //return true if page changed, false in page not changed
+  void displayPage(uint8_t page);
+  void drawBottomIndicator(uint8_t index);
+  void drawRightIndicator(uint8_t index);
+  uint8_t menuIndex = 0;
+  void drawLeftIndicator(uint8_t index);
+  uint8_t menuItemStartIndex = 0;
+  const uint8_t menuItemPerPage = 5;
+  const uint8_t numberOfMenuItems = 9;
+  enum MENU
+  {
+    MENU_TARE,
+    MENU_CALIBRATE,
+    MENU_SPOOL_HOLDER_WEIGHT,
+    MENU_SET_SPOODER_ID,
+    MENU_LOW_FILAMENT_SETUP,
+    MENU_NOTIFICATION,
+    MENU_FIRMWARE_UPDATE,
+    MENU_OPTIONS,
+    MENU_DEBUG
+  };
+  String menuTitle[9] = {"Tare",
+                         "Calibrate",
+                         "Spool Holder Weight",
+                         "Set Spooder ID",
+                         "Low Filament Setup",
+                         "Notification",
+                         "Firmware Update",
+                         "Options",
+                         "Debug"};
+  uint8_t tareSelection = TARE_OK;
+  void drawTriangle(uint8_t x, uint8_t y);
+  void tare();
+  void calibrate();
+  uint32_t returnToHomepageTimer;
+  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 30000; //30 seconds
+  void checkCurrentPage();
+
   //Set the default total weight in grams for calibration after power on
   //Valid values from 0 to 9999
   void setCalibrationWeight(uint16_t weight);
@@ -229,114 +360,6 @@ public:
   uint16_t getLongClickTime();
   //Time settings for button
   uint16_t getDoubleClickTime();
-
-  //made public due to using callback function in class, requires an outside-class function
-  void handleStatus();     //Return the FS type, status and size info
-  void handleFileList();   //Return the list of files in the directory specified by the "dir" query string parameter. Also demonstrates the use of chuncked responses.
-  void handleGetEdit();    //This specific handler returns the index.htm from the /edit folder.
-  void handleFileCreate(); //Handle the creation/rename of a new file
-  void handleFileDelete(); //Handle a file deletion request
-  void handleFileUpload(); //Handle a file upload request
-  void handleNotFound();   //The "Not Found" handler
-  void replyOK();
-  void checkGithubTag();
-
-  void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
-
-private:
-  //ESP8266WebServer server;
-  Button2 button;
-  ESPRotary rotary;
-  SSD1306Wire display;
-
-  struct VERSION_STRUCT
-  {
-    uint8_t major; //incompatible API changes
-    uint8_t minor; //add functionality in a backwards compatible manner
-    uint8_t patch; //make backwards compatible bug fixes
-  };
-  VERSION_STRUCT currentVersion;
-
-  //struct used to interact with eeprom, without the hasstle of address and lengths
-  struct EEPROM_SETTING_STRUCT
-  {
-    VERSION_STRUCT version;
-    float calValue;
-    uint16_t spoolHolderWeight;
-    byte spooderIDSetStatus;
-    uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
-    uint8_t spooderIDNumber; //1 - 99
-    uint16_t lowFilamentThreshold;
-    uint8_t notifyOnPrintStarted;
-    uint8_t notifyOnPrintCompleted;
-    uint8_t notifyOnLowFilament;
-    uint8_t notifyOnFallOffRack;
-    uint8_t notifyOnFallOffBearing;
-    uint8_t notifyOnTangled;
-    uint8_t servicesWiFi;
-    uint8_t servicesMDNS;
-    uint8_t servicesBLYNK;
-    uint8_t servicesWebServer;
-    uint8_t servicesArduinoOTA;
-  } setting;
-
-  //Network related
-  bool enableWifi = false;
-  uint8_t wifiStatus = WIFI_STATUS_BOOT;
-  bool enableBlynk = false;
-  bool enableWebServer = false;
-  bool enableArduinoOTA = false;
-  bool enableNetworkTime = true;
-  void updateWifi();
-  void connectWifi();
-  void beginServices();
-  void setMDNS(bool value);
-  void setBlynk(bool value);
-  void setWebServer(bool value);
-  void setArduinoOTA(bool value);
-  ArduinoOTAClass *ArduinoOTA; //use pointer to creat/delete object in code
-  ESP8266WebServer *webServer; //use pointer to creat/delete object in code
-  void installDynamicServiceQuery();
-  bool netWorkTimeReceived = false;
-  void updateNetworkTime();
-  uint32_t updateNetworkTimeTimer;
-  uint32_t UPDATE_NETWORK_TIME_PERIOD = 1000;
-
-  struct SPOODERS_DATASET_STRUCT
-  {
-    char hostname[10];
-    IPAddress ip;
-    int16_t fw; //filament weight in gram
-  } dataset[20];
-
-  uint8_t currentPage = PAGE_NONE;
-  uint8_t previousPage = PAGE_NONE;
-  bool setPage(uint8_t page); //return true if page changed, false in page not changed
-  void displayPage(uint8_t page);
-  void drawBottomIndicator(uint8_t index);
-  void drawRightIndicator(uint8_t index);
-  uint8_t menuIndex = 0;
-  void drawLeftIndicator(uint8_t index);
-  uint8_t menuItemStartIndex = 0;
-  const uint8_t menuItemPerPage = 5;
-  const uint8_t numberOfMenuItems = 9;
-  String menuTitle[9] = {"Tare",
-                         "Calibrate",
-                         "Spool Holder Weight",
-                         "Set Spooder ID",
-                         "Low Filament Setup",
-                         "Notification",
-                         "Reserved1",
-                         "Reserved2",
-                         "Debug"};
-  uint8_t tareSelection = TARE_OK;
-  void drawTriangle(uint8_t x, uint8_t y);
-  void tare();
-  void calibrate();
-  uint32_t returnToHomepageTimer;
-  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 3000000;
-  void checkCurrentPage();
-
   uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
 
   HX711_ADC loadcell;
@@ -371,7 +394,7 @@ private:
   uint8_t calibrate2Digit = 0;
   uint8_t calibrate1Digit = 0;
   uint16_t getCalibrationWeight(); //get the weight from 4-digit UI menu
-  uint16_t calibrationWeight = 0;
+  //uint16_t calibrationWeight = 0;
   void checkCalibrateEditModeTimer();
   bool displayCalibrateDigit = true;
   uint32_t calibrateEditModerTimer;
@@ -410,7 +433,8 @@ private:
     DEBUG_QUERY_MDNS,
     DEBUG_UPDATE_SERVICE_TXT,
     DEBUG_PRINT_SPOODERS_DATASET,
-    DEBUG_CHECK_GITHUB_TAG,
+    DEBUG_CHECK_GITHUB_VERSION,
+    DEBUG_UPDATE_FROM_GITHUB,
     DEBUG_PRINT_MEMORY,
     DEBUG_SERVICES,
     DEBUG_RETURN
@@ -418,7 +442,7 @@ private:
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-#define NUMBER_OF_DEBUG_ITEMS 22
+#define NUMBER_OF_DEBUG_ITEMS 23
   uint8_t numberOfDebugMenuItems = NUMBER_OF_DEBUG_ITEMS;
   String debugMenuTitle[NUMBER_OF_DEBUG_ITEMS] = {
       "Load to Setting",
@@ -439,33 +463,36 @@ private:
       "Query mDNS",
       "Update Service Txt",
       "Print Spooders Dataset",
-      "Check Github tag",
+      "Check Github Version",
+      "Update From Github",
       "Print Memory",
-      "Services",
+      "Services_Reserved",
       "<<-- Return to Menu "};
-  enum SERVICE_MENU
+  enum OPTIONS_MENU
   {
-    SERVICES_MENU_WIFI,
-    SERVICES_MENU_MDNS,
-    SERVICES_MENU_BLYNK,
-    SERVICES_MENU_WEB_SERVER,
-    SERVICES_MENU_ARDUINO_OTA,
-    SERVICES_MENU_RETURN
+    OPTIONS_MENU_WIFI,
+    OPTIONS_MENU_MDNS,
+    OPTIONS_MENU_BLYNK,
+    OPTIONS_MENU_WEB_SERVER,
+    OPTIONS_MENU_ARDUINO_OTA,
+    OPTIONS_MENU_AUTO_HOMEPAGE,
+    OPTIONS_MENU_RETURN
   };
-  String servicesMenuTitle[6] =
+  String optionsMenuTitle[7] =
       {
           "WiFi",
           "mDNS",
           "Blynk",
           "Web server",
           "Arduino OTA",
-          "<<-- Return to Debug"};
-  uint8_t servicesMenuSelection = SERVICES_MENU_WIFI;
-  uint8_t servicesMenuItemStartIndex = 0;
-  uint8_t servicesMenuItemPerPage = 5;
-  uint8_t numberOfServicesMenuItems = 6;
-  bool getServicesSetting(uint8_t selection);
-  void setServicesSetting(uint8_t selection, bool value);
+          "Auto Homepage",
+          "<<-- Return to Menu"};
+  uint8_t optionsMenuSelection = OPTIONS_MENU_WIFI;
+  uint8_t optionsMenuItemStartIndex = 0;
+  uint8_t optionsMenuItemPerPage = 5;
+  uint8_t numberOfOptionsMenuItems = 7;
+  bool getOptionsSetting(uint8_t selection);
+  void setOptionsSetting(uint8_t selection, bool value);
 
   void loadToSetting();
   void saveToEEPROM();
@@ -504,7 +531,7 @@ private:
   char config_version[16]; // "0.3.0"
   char wifi_ssid[32];      // "your_ssid", max 32 bytes
   char wifi_password[63];  // "your_password", max 63 bytes
-  char blynk_auth[32];     // 32-bytes blynk authorization code
+  char blynk_auth[33];     // 32-bytes blynk authorization code, +1 byte for null terminator
 
   //const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
   char spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE][12];
@@ -649,17 +676,55 @@ private:
 
   //Github auto-update function related:
   //Imported from https://github.com/yknivag/ESP_OTA_GitHub
+  void checkGithubLatestRelease(bool forceCheck, bool doUpdate);
   BearSSL::CertStore *_certStore;
-  String _lastError;  // Holds the last error generated
-  String _upgradeURL; // Holds the upgrade URL (changes when getFinalURL() is run).
-  const char *_user = "FuzzyNoodle";
-  const char *_repo = "Fuzzy-Spooder";
-  const char *_host = "api.github.com";
-  int _port = 443;
+
+  const char *user = "FuzzyNoodle";
+  const char *repo = "Fuzzy-Spooder";
+  const char *githubHost = "api.github.com";
+  int githubPort = 443;
   const char *_currentTag = CURRENT_VERSION;
-  const char *_binFile = "fuzzy_spooder.bin";
+  //Need to reserve global String to prevent unwanted memory usage
+  const int githubVersionSize = 12;
+  String githubVersion = "- - - - -";
+  const int _updateURLSize = 768;
+  String _updateURL = "URL"; // Holds the update URL (changes when getFinalURL() is run).
+  const char *_binFile = "firmware.bin";
+#define GHOTA_CONTENT_TYPE "application/octet-stream"
   bool _preRelease = true;
   int numCerts = 0; //number or certs read from file system
+  bool githubVersionObtained = false;
+  bool githubUpdateAvailable = false;
+  bool versionTagIsValid(VERSION_STRUCT v);
+  bool convertTagToVersion(String t, VERSION_STRUCT *v); //convert String tag into VERSION_STRUCT, return false if invalid tag
+  void printVersion(VERSION_STRUCT v);
+  void saveGitgubFileToFs();
+  //urlDetails_t _urlDetails(String url); // Separates a URL into protocol, host and path into a custom struct
+  enum FIRMWARRE_UPDATE_MENU
+  {
+    FIRMWARE_UPDATE_MENU_CHECK_NOW,
+    FIRMWARE_UPDATE_MENU_UPDATE_NOW,
+    FIRMWARE_UPDATE_MENU_AUTO_UPDATE,
+    FIRMWARE_UPDATE_NEXT_CHECK_TIME,
+    FIRMWARE_UPDATE_MENU_RETURN_TO_MENU
+
+  };
+  String updateMenuTitle[5] =
+      {
+          "Check Now",
+          "Update Now",
+          "Auto Update:",
+          "Next check in",
+          "<<-- Return to Menu"};
+  uint8_t updateMenuSelection = FIRMWARE_UPDATE_MENU_CHECK_NOW;
+  uint8_t updateMenuItemStartIndex = 0;
+  uint8_t updateMenuItemPerPage = 3;
+  uint8_t numberOfUpdateMenuItems = 5;
+  uint32_t nextCheckTimeMillis = 0; //random countdown between 60~120 minutes
+  void setNextCheckCountdown();
+  void updateAutoGithubCheck();
+  uint32_t updateAutoGithubCheckTimer;
+  const uint32_t UPDATE_AUTO_GITHUB_CHECK_PEROID = 1000;
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
