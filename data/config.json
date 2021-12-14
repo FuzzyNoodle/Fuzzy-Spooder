@@ -1,8 +1,8 @@
 {
     "config_version": "0.3.0",
-    "wifi_ssid": "your_ssid",
-    "wifi_password": "your_password",
-    "blynk_auth": "your_blynk_auth_code",
+    "wifi_ssid": "gnet02",
+    "wifi_password": "K433bZz7",
+    "blynk_auth": "kyDyYXra-0wlr8xcN7teW3_CMm3L6TVN",
     "spool_holder": [
         {
             "name": "Black",
