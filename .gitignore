@@ -289,5 +289,5 @@ extras/personal_notes.txt
 library.json
 
 # Personal Develop Files
-extras/ignored/
 data/config.json
+extras/ignored/
