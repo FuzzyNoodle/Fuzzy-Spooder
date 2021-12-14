@@ -290,4 +290,4 @@ library.json
 
 # Personal Develop Files
 extras/ignored/
-data/config.json
+#data/config.json
