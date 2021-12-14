@@ -45,49 +45,91 @@ static void globalReplyOK()
 {
     estimatorPointer->replyOK();
 }
+static void globalHandleWebsocketsMessage(WebsocketsClient &client, WebsocketsMessage message)
+{
+    auto data = message.data();
+
+    // Log message
+    Serial.print("Got Message: ");
+    Serial.println(data);
+
+    // Echo message
+    client.send("Echo: " + data);
+}
+static void globalHandleWebsocketsEvent(WebsocketsClient &client, WebsocketsEvent event, String data)
+{
+    switch (event)
+    {
+    case WebsocketsEvent::ConnectionOpened:
+        Serial.println("Connection opened");
+
+        break;
+    case WebsocketsEvent::ConnectionClosed:
+        Serial.print("Connection closed:");
+        Serial.println(client.getCloseReason());
+        /*
+        CloseReason_None                =       -1,
+        CloseReason_NormalClosure       =       1000,
+        CloseReason_GoingAway           =       1001,
+        CloseReason_ProtocolError       =       1002,
+        CloseReason_UnsupportedData     =       1003,
+        CloseReason_NoStatusRcvd        =       1005,
+        CloseReason_AbnormalClosure     =       1006,
+        CloseReason_InvalidPayloadData  =       1007,
+        CloseReason_PolicyViolation     =       1008,
+        CloseReason_MessageTooBig       =       1009,
+        CloseReason_InternalServerError =       1011,
+        */
+        break;
+    case WebsocketsEvent::GotPing:
+        Serial.println("Got ping.");
+        break;
+    case WebsocketsEvent::GotPong:
+        Serial.println("Got pong");
+        break;
+    default:
+        break;
+    }
+}
 
 MDNSResponder::hMDNSServiceQuery hMDNSServiceQuery = 0; // The global handle of the 'http.tcp' service query in the MDNS responder
 void globalMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
     //pass information the the inside-class method
-    estimatorPointer->MDNSServiceQueryCallback(serviceInfo, answerType, p_bSetContent);
+    estimatorPointer->MDNSServiceQueryCallback(&serviceInfo, answerType, p_bSetContent);
 }
-static void globalPrintSpoodersDataset()
+bool globalComplareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUCT b)
 {
-    uint16_t count = 0;
-    Serial.print(F("Local spooder services found: "));
-    Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
-
-    for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
+    //padding
+    if (strlen(a.spooderID) == 2)
     {
-        count++;
-        Serial.print(String(count) + ".");
-        //Serial.print(info.serviceDomain());
-        if (info.hostDomainAvailable())
-        {
-            String s = "\tHostname: ";
-            s += String(info.hostDomain());
-            s += (info.hostPortAvailable()) ? (":" + String(info.hostPort())) : "";
-            Serial.println(s);
-        }
-        if (info.IP4AddressAvailable())
-        {
-            String s = "\tIP4:";
-            for (auto ip : info.IP4Adresses())
-            {
-                s += " " + ip.toString();
-            }
-            Serial.println(s);
-        }
-        if (info.txtAvailable())
-        {
-            String s = "\tTXT:";
-            for (auto kv : info.keyValues())
-            {
-                s += "\t" + String(kv.first) + " : " + String(kv.second) + "\n";
-            }
-            Serial.println(s);
-        }
+        //need to pad A1 to A01, so that A2 (A02) will be smaller than A11
+        SPOODERS_DATASET_STRUCT temp;
+        strncpy(temp.spooderID, a.spooderID, 1);
+        strcpy(temp.spooderID + 1, "0");
+        strcpy(temp.spooderID + 2, a.spooderID + 1);
+        strcpy(a.spooderID, temp.spooderID);
+    }
+    if (strlen(b.spooderID) == 2)
+    {
+        SPOODERS_DATASET_STRUCT temp;
+        strncpy(temp.spooderID, b.spooderID, 1);
+        strcpy(temp.spooderID + 1, "0");
+        strcpy(temp.spooderID + 2, b.spooderID + 1);
+        strcpy(b.spooderID, temp.spooderID);
+    }
+
+    //This function starts comparing the first character of each string.
+    //If they are equal to each other, it continues with the following
+    //pairs until the characters differ or until a terminating
+    //null-character is reached.
+    if (strcmp(a.spooderID, b.spooderID) < 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
 void globalPrintMemory(String s)
@@ -118,6 +160,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     Serial.println("Program started.");
     Serial.print(F("Firmware version "));
+
     Serial.print(currentVersion.major);
     Serial.print(F("."));
     Serial.print(currentVersion.minor);
@@ -251,7 +294,16 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         setting.optionsAutoHomepage = true;
         isDirty = true;
     }
-
+    if (setting.optionsSpooderClient != 0 && setting.optionsSpooderClient != 1)
+    {
+        setting.optionsSpooderClient = false;
+        isDirty = true;
+    }
+    if (setting.optionsSpooderServer != 0 && setting.optionsSpooderServer != 1)
+    {
+        setting.optionsSpooderServer = false;
+        isDirty = true;
+    }
     //Initialize auto github update settings for the first time
     if (setting.autoGithubUpdate != 0 && setting.autoGithubUpdate != 1)
     {
@@ -339,11 +391,20 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     _updateURL.reserve(_updateURLSize);
     setNextCheckCountdown();
 
-    Serial.println(F("Setup completed."));
+    //local communication related
+
+    uint16_t s = sizeof(dataset[0]) * MAX_NUM_OF_SPOODERS;
+    Serial.print(F("Size of dataset table: "));
+    Serial.println(s);
 
     printingStatus = STATUS_BOOT;
     printingStatusString = "STATUS_BOOT";
     setPage(PAGE_HOME);
+
+    uint32_t num = spooderIDLetter * 26 + spooderIDNumber + (setting.calValue * 100.0);
+    randomSeed(num);
+
+    Serial.println(F("Setup completed."));
 
     //Enable WiFi according to user setting
     setWifi(setting.optionsWiFi);
@@ -428,6 +489,15 @@ void FILAMENT_ESTIMATOR::update(void)
     {
         checkCurrentPage();
     }
+
+    updateDataset();
+
+    /*
+    if (updateUdp == true)
+    {
+        updateUdpPacket();
+    }
+    */
 }
 void FILAMENT_ESTIMATOR::setWifi(bool value)
 {
@@ -489,6 +559,13 @@ void FILAMENT_ESTIMATOR::updateWifi()
         {
             webServer->handleClient();
         }
+        if (enableSpooderClient == true)
+        {
+            if (updateWebsockets == true) //only for acting as server
+            {
+                updateWebsocketsServer();
+            }
+        }
         if (enableArduinoOTA == true)
         {
             ArduinoOTA->handle();
@@ -497,13 +574,155 @@ void FILAMENT_ESTIMATOR::updateWifi()
         {
             updateNetworkTime();
         }
+        switch (spooderClientState)
+        {
+        case NONE:
+        {
+            break;
+        }
 
-        break;
-    }
+        case SEARCHING_FOR_CONNECTION:
+        {
+            if (millis() - searchingForConnectionTimer > SEARCHING_FOR_CONNECTION_PERIOD)
+            {
+                //Serial.println("Check spooder server status.");
+                searchingForConnectionTimer = millis();
+                uint32_t numAns = MDNS.answerCount(hMDNSServiceQuery);
+                if (0)
+                {
+                    for (uint8_t i = 0; i < numAns; i++)
+                    {
+                        if (isAnswerValidServer(i))
+                        {
+                            Serial.print(i);
+                            Serial.println(" is valid.");
+                        }
+                        else
+                        {
+                            Serial.print(i);
+                            Serial.println(" is not valid.");
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
+        case CONNECTED_TO_SERVER:
+        {
+
+            break;
+        }
+
+        case RECONNECTING_TO_SERVER:
+        {
+
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+
+        } //switch (spooderClientState)
+    }     //case WIFI_STATUS_CONNECTED:
 
     default:
         break;
+    } //switch (wifiStatus)
+}
+bool FILAMENT_ESTIMATOR::isAnswerValidServer(uint8_t index)
+{
+    //Serial.println("Validating answer:");
+    /*
+    valid hostname example: spooderA1.local
+    Checking validity
+    - The answer must have a hostname.
+    - Then lengh of the hostname must be 15 or 16.
+    - The hostname must contains  "spooder"
+    - The hostname must contains  ".local"
+    - IP adress must exist.
+    - Port must exist.
+    - Port number must equal to websocketsPort. (8266)
+    */
+
+    bool isValid = true;
+    if (MDNS.hasAnswerHostDomain(hMDNSServiceQuery, index) == true)
+    {
+
+        uint8_t len = strlen(MDNS.answerHostDomain(hMDNSServiceQuery, index));
+        if (len != 15 && len != 16)
+        {
+            //Serial.println(F("  Hostname length is invalid."));
+            isValid = false;
+        }
+        else //has correct length 15 or 16
+        {
+            if (strstr(MDNS.answerHostDomain(hMDNSServiceQuery, index), "spooder") != NULL)
+            {
+                //Serial.println(F("  Hostname contains 'spooder"));
+            }
+            else
+            {
+                isValid = false;
+            }
+
+            if (strstr(MDNS.answerHostDomain(hMDNSServiceQuery, index), ".local") != NULL)
+            {
+                //Serial.println(F("  Hostname contains '.local"));
+            }
+            else
+            {
+                isValid = false;
+            }
+        }
     }
+    else //if (MDNS.hasAnswerHostDomain(hMDNSServiceQuery, index) == true)
+    {
+        //Serial.println(F("  Hostname does not exist."));
+        isValid = false;
+    }
+
+    if (MDNS.hasAnswerIP4Address(hMDNSServiceQuery, index) == true)
+    {
+        //Serial.println(F("  IP adress exists."));
+    }
+    else
+    {
+        //Serial.println(F("  IP adress does not exist."));
+        isValid = false;
+    }
+
+    if (MDNS.hasAnswerPort(hMDNSServiceQuery, index) == true)
+    {
+        //Serial.println(F("  Port exists."));
+        if (MDNS.answerPort(hMDNSServiceQuery, index) == websocketsPort)
+        {
+            //Serial.println(F("  Port number is correct."));
+        }
+        else
+
+        {
+            //Serial.println(F("  Port number is not correct."));
+            isValid = false;
+        }
+    }
+    else
+    {
+        //Serial.println(F("  Port does not exist."));
+        isValid = false;
+    }
+    if (isValid == true)
+    {
+        //Serial.println(F("The answer is a valid server."));
+    }
+    else
+    {
+        // Serial.println(F("The answer is not a valid server."));
+    }
+
+    return isValid;
 }
 void FILAMENT_ESTIMATOR::updateNetworkTime()
 {
@@ -571,8 +790,14 @@ void FILAMENT_ESTIMATOR::beginServices()
     {
         setArduinoOTA(true);
     }
-
-    //beginArduinoOTA();
+    if (setting.optionsSpooderClient == true)
+    {
+        setSpooderClient(true);
+    }
+    if (setting.optionsSpooderServer == true)
+    {
+        setSpooderServer(true);
+    }
     if (enableNetworkTime == true)
     {
         configTime(TZ_Etc_GMT, "pool.ntp.org");
@@ -611,9 +836,13 @@ void FILAMENT_ESTIMATOR::setMDNS(bool value)
                     {
                         Serial.println(F(" succeeded."));
                         //add service announcements
-                        MDNS.addService(0, "http", "tcp", 80);                     //for web access
-                        spooderService = MDNS.addService(0, "spooder", "tcp", 80); //for inter-device data exchange, using websocket
-                        installDynamicServiceQuery();
+                        MDNS.addService(0, "http", "tcp", 80); //for web access
+
+                        //put own ID into dataset index 0
+                        //get the position of '.'
+                        strncpy(dataset[0].spooderID, hostname.c_str() + 7, strlen(hostname.c_str()) - 7);
+                        //Serial.print(F("Copy ID into own dataset."));
+                        //Serial.println(dataset[0].spooderID);
                     }
                     else
                     {
@@ -635,13 +864,18 @@ void FILAMENT_ESTIMATOR::setMDNS(bool value)
             hMDNSServiceQuery = 0;
             MDNS.close();
             Serial.println(F("mDNS stopped."));
+            clearDataset(0); //clear own data
+
+            //close server, if opened
+
+            //stop spooder client, if opended
         }
         else //MDNS is not running
         {
             Serial.println(F("mDNS not started."));
         }
     } //turn off mDNS
-    //globalPrintMemory("setMDNS: ");
+
     return;
 }
 void FILAMENT_ESTIMATOR::installDynamicServiceQuery()
@@ -659,28 +893,143 @@ void FILAMENT_ESTIMATOR::installDynamicServiceQuery()
         }
     }
 }
-void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
+void FILAMENT_ESTIMATOR::removeDynamicServiceQuery()
 {
+    if (hMDNSServiceQuery)
+    {
+        if (MDNS.removeServiceQuery(hMDNSServiceQuery))
+        {
+            Serial.println(F("Dynamic service query: 'spooder.tcp' remove succeeded."));
+            hMDNSServiceQuery = 0;
+        }
+        else
+        {
+            Serial.println(F("Dynamic service query: 'spooder.tcp' remove failed."));
+        }
+    }
+}
+void FILAMENT_ESTIMATOR::listSpooderService()
+{
+}
+void FILAMENT_ESTIMATOR::updateWebsocketsServer()
+{
+    listenForWebsocketsClients();
+    pollWebsocketsClients();
+}
+void FILAMENT_ESTIMATOR::listenForWebsocketsClients()
+{
+    if (webSocketsServer.poll())
+    {
+        int8_t freeIndex = getFreeClientIndex();
+        if (freeIndex >= 0)
+        {
+            WebsocketsClient newClient = webSocketsServer.accept();
+            Serial.printf("Accepted new websockets client at index %d\n", freeIndex);
+            newClient.onMessage(globalHandleWebsocketsMessage);
+            newClient.onEvent(globalHandleWebsocketsEvent);
+            Serial.println(F("Send: Hello from server!"));
+            newClient.send("Hello from server!");
+
+            webSocketsClientsVector[freeIndex] = newClient;
+        }
+        else
+        {
+            Serial.println(F("Max clients reached. Not accepted."));
+        }
+    }
+}
+void FILAMENT_ESTIMATOR::pollWebsocketsClients()
+{
+    for (byte i = 0; i < maxClients; i++)
+    {
+        webSocketsClientsVector[i].poll();
+    }
+}
+int8_t FILAMENT_ESTIMATOR::getFreeClientIndex()
+{
+    // If a client in our list is not available, it's connection is closed and we
+    // can use it for a new client.
+    for (byte i = 0; i < maxClients; i++)
+    {
+        if (!webSocketsClientsVector[i].available())
+            return i;
+    }
+    return -1;
+}
+
+/*void FILAMENT_ESTIMATOR::updateUdpPacket()
+{
+    int packetSize = Udp.parsePacket();
+    if (packetSize)
+    {
+        // receive incoming UDP packets
+        Serial.printf("Received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
+        if (packetSize >= UDP_PACKET_SIZE_LIMIT)
+        {
+            Serial.println(F("Buffer overflow."));
+            //clears udp buffer
+            while (Udp.available())
+            {
+                Udp.read();
+            }
+        }
+        else
+        {
+            int len = Udp.read(udpPacketBuffer, UDP_PACKET_SIZE_LIMIT);
+            if (len > 0)
+            {
+                udpPacketBuffer[len] = 0;
+            }
+            Serial.printf("UDP packet contents: %s\n", udpPacketBuffer);
+            //clears packet buffer
+            udpPacketBuffer[0] = 0;
+        }
+    }
+}
+*/
+void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo *serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
+{
+    listMDNSDynamicQueryAnswer();
+    return;
+    if (answerType == MDNSResponder::AnswerType::IP4Address && p_bSetContent == true)
+    {
+        Serial.print("===== ");
+        Serial.print(serviceInfo->hostDomain());
+        Serial.print(":");
+        Serial.print(serviceInfo->IP4Adresses()[0]);
+        Serial.println(" Modified.");
+        listMDNSDynamicQueryAnswer();
+    }
+    if (answerType == MDNSResponder::AnswerType::ServiceDomain && p_bSetContent == false)
+    {
+        Serial.print("===== ");
+        Serial.print(serviceInfo->hostDomain());
+        Serial.print(":");
+        Serial.print(serviceInfo->IP4Adresses()[0]);
+        Serial.println(" Deleted.");
+        listMDNSDynamicQueryAnswer();
+    }
+
     String answerInfo;
-    answerInfo = String(serviceInfo.hostDomain()) + ": ";
+    answerInfo = String(serviceInfo->hostDomain()) + ": ";
     switch (answerType)
     {
     case MDNSResponder::AnswerType::ServiceDomain:
-        answerInfo += "ServiceDomain " + String(serviceInfo.serviceDomain());
+        answerInfo += "ServiceDomain " + String(serviceInfo->serviceDomain());
         break;
     case MDNSResponder::AnswerType::HostDomainAndPort:
-        answerInfo += "HostDomainAndPort " + String(serviceInfo.hostDomain()) + ":" + String(serviceInfo.hostPort());
+        answerInfo += "HostDomainAndPort " + String(serviceInfo->hostDomain()) + ":" + String(serviceInfo->hostPort());
         break;
     case MDNSResponder::AnswerType::IP4Address:
         answerInfo += "IP4Address ";
-        for (IPAddress ip : serviceInfo.IP4Adresses())
+        for (IPAddress ip : serviceInfo->IP4Adresses())
         {
             answerInfo += "- " + ip.toString();
         };
         break;
     case MDNSResponder::AnswerType::Txt:
-        answerInfo += "TXT " + String(serviceInfo.strKeyValue());
-        for (auto kv : serviceInfo.keyValues())
+        answerInfo += "TXT " + String(serviceInfo->strKeyValue());
+        for (auto kv : serviceInfo->keyValues())
         {
             answerInfo += "\nkv : " + String(kv.first) + " : " + String(kv.second);
         }
@@ -689,6 +1038,212 @@ void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo
         answerInfo = "Unknown Answertype";
     }
     Serial.printf("Answer %s %s\n", answerInfo.c_str(), p_bSetContent ? "Modified" : "Deleted");
+}
+void FILAMENT_ESTIMATOR::updateDataset()
+{
+    if (millis() - updateDatsetTimer < UPDATE_DATASET_PERIOD)
+    {
+        return;
+    }
+    updateDatsetTimer = millis();
+    if (!MDNS.isRunning())
+    {
+        return;
+    }
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        return;
+    }
+
+    //update own dataset
+    dataset[0].fw = (int16_t)filamentWeight;
+
+    //announce to others
+    updateServiceTxt();
+}
+void FILAMENT_ESTIMATOR::copyDatasetFromServiceInfo()
+{
+    //Serial.println(F("Copy all data from ServiceInfo into dataset:"));
+
+    uint16_t index = 0; //used as dataset[index]
+    //Serial.print(F("answerInfo size = "));
+    //Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
+    if (MDNS.answerInfo(hMDNSServiceQuery).size() == 0)
+        return;
+    //Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
+
+    for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
+    {
+        index++;
+        //copy ID into dataset
+        if (info.hostDomainAvailable())
+        { //info.hostDomain() example: spooderA2.local
+            if (strncmp(info.hostDomain(), "spooder", 7) == 0)
+            {
+                //get the position of '.'
+                uint8_t pos;
+                char *dotPtr = strchr(info.hostDomain(), '.');
+                if (dotPtr != NULL)
+                {
+                    pos = dotPtr - info.hostDomain() + 1;
+                    //Serial.print(F("'.' found at "));
+                    //Serial.println(pos); //'.' found at 10
+                    //copy 'A2' or 'A13' into spooderID
+                    strncpy(dataset[index].spooderID, info.hostDomain() + 7, pos - 8);
+                }
+            }
+        } //if (info.hostDomainAvailable())
+        //copy txt info into dataset
+        if (info.txtAvailable())
+        {
+            //FW: filament weight in gram
+            if (info.value("FW") != nullptr)
+            {
+                dataset[index].fw = atoi(info.value("FW"));
+                //Serial.println(dataset[index].fw);
+            }
+        } //if (info.txtAvailable())
+        datasetLastPopulatedIndex = index;
+    } //for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
+}
+void FILAMENT_ESTIMATOR::staticQueryMDNS()
+{
+    if (MDNS.isRunning() == true)
+    {
+        Serial.println(F("Query 'spooder' services in the local network:"));
+        int n = MDNS.queryService("spooder", "tcp"); // Send out query for esp tcp services
+        Serial.println(F("mDNS query done."));
+        if (n == 0)
+        {
+            Serial.println("No services found.");
+        }
+        else //services found
+        {
+            Serial.print(n);
+            Serial.println(" service(s) found");
+            for (int i = 0; i < n; ++i)
+            {
+                // Print details for each service found
+                Serial.print(i + 1);
+                Serial.print(": ");
+                Serial.print(MDNS.answerHostname(i));
+                Serial.print(" (");
+                Serial.print(MDNS.answerIP(i));
+                Serial.print(":");
+                Serial.print(MDNS.answerPort(i));
+                Serial.print(") TXT:");
+                Serial.print(MDNS.answerTxts(hMDNSServiceQuery, i));
+
+                Serial.println();
+            }
+        }
+    }
+    else //MDNS is not running on this device
+    {
+        Serial.println(F("Failed. mDNS is not running."));
+    }
+    return;
+}
+void FILAMENT_ESTIMATOR::removeStaticQuery()
+{
+    if (MDNS.isRunning() == true)
+    {
+        if (MDNS.removeQuery())
+        {
+            Serial.println(F("Static query removed."));
+        }
+        else
+        {
+            Serial.println(F("Static query not removed."));
+        }
+    }
+    else //MDNS is not running on this device
+    {
+        Serial.println(F("Failed. mDNS is not running."));
+    }
+}
+void FILAMENT_ESTIMATOR::listMDNSDynamicQueryAnswer()
+{
+    uint32_t numAns = MDNS.answerCount(hMDNSServiceQuery);
+    Serial.print(numAns);
+    Serial.println(" service(s) found");
+    if (numAns > 0)
+    {
+        for (int i = 0; i < numAns; i++)
+        {
+            // Print details for each service found
+            Serial.print(i);
+            Serial.print(": ");
+            Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
+            Serial.print(" (");
+            Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); //only list the first(index==0) ip
+            Serial.print(":");
+            Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
+            Serial.print(")");
+            Serial.println();
+
+            isAnswerValidServer(i);
+        }
+    }
+}
+void FILAMENT_ESTIMATOR::updateServiceTxt()
+{
+    if (MDNS.isRunning() == false)
+    {
+        //Serial.println(F("Failed. mDNS is not running."));
+        return;
+    }
+
+    //Serial.print(F("Update mDNS service txt: filament,"));
+    //Serial.print((int16_t)filamentWeight);
+    //Serial.println();
+
+    //MDNS.addDynamicServiceTxt(spooderService, "FW", (int16_t)filamentWeight);
+    // 'announce' can be called every time, the configuration of some service
+    // changes. Mainly, this would be changed content of TXT items.
+    //MDNS.announce();
+    return;
+}
+void FILAMENT_ESTIMATOR::printSpoodersDataset()
+{
+    if (MDNS.isRunning() == false)
+    {
+        Serial.println(F("Failed. mDNS is not running."));
+        return;
+    }
+
+    copyDatasetFromServiceInfo();
+
+    Serial.print(F("Total number of spooders:"));
+    Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size() + 1);
+
+    Serial.println(F("Index\tID\tFW"));
+    for (uint8_t i = 0; i <= datasetLastPopulatedIndex; i++)
+    {
+        if (i < 10)
+        {
+            Serial.print(F(" "));
+        }
+        Serial.print(i);
+        Serial.print(F(":\t"));
+
+        Serial.print(dataset[i].spooderID);
+        Serial.print(F("\t"));
+        Serial.print(dataset[i].fw);
+        Serial.println();
+    }
+
+    return;
+}
+void FILAMENT_ESTIMATOR::clearDataset(uint8_t index)
+{
+    memset(dataset[0].spooderID, 0, DATASET_SPOODER_ID_SIZE);
+}
+void FILAMENT_ESTIMATOR::sortDataset()
+{
+    // Sort structure array using user defined
+    // function complareTwoSpooders()
+    std::sort(dataset, dataset + datasetLastPopulatedIndex + 1, globalComplareTwoSpooders);
 }
 void FILAMENT_ESTIMATOR::setBlynk(bool value)
 {
@@ -819,6 +1374,148 @@ void FILAMENT_ESTIMATOR::setWebServer(bool value)
         }
     } //trun off web server
     //globalPrintMemory("setServer: ");
+    return;
+}
+void FILAMENT_ESTIMATOR::setSpooderClient(bool value)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("Failed. WiFi not connected."));
+        return;
+    }
+    if (value == true) //turn on Spooder Client
+    {
+        if (enableSpooderClient == true) //already enabled
+        {
+            Serial.println(F("Spooder Client already enabled."));
+        }
+        else //enable SpooderClient
+        {
+            Serial.println(F("Spooder Client enabled"));
+            installDynamicServiceQuery();
+            spooderClientState = SEARCHING_FOR_CONNECTION;
+            enableSpooderClient = true;
+        }
+    }    //turn on Spooder Client
+    else //trun off Spooder Client
+    {
+        if (enableSpooderClient == true) //disable Spooder Client
+        {
+            Serial.println(F("Spooder Client disabled."));
+            removeDynamicServiceQuery();
+            spooderClientState = NONE;
+            enableSpooderClient = false;
+        }
+        else //SpooderClient not enabled
+        {
+            Serial.println(F("Spooder Client already disabled."));
+        }
+    } //trun off Spooder Client
+    return;
+}
+void FILAMENT_ESTIMATOR::setSpooderServer(bool value)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("Failed. WiFi not connected."));
+        return;
+    }
+    if (value == true) //turn on Spooder Server
+    {
+        if (enableSpooderServer == true) //already enabled
+        {
+            Serial.println(F("Spooder Server already enabled."));
+        }
+        else //enable Spooder Server
+        {
+            if (!spooderService)
+            {
+                spooderService = MDNS.addService(0, "spooder", "tcp", websocketsPort); //for inter-device data exchange, using tcp packet
+                if (spooderService)
+                {
+                    Serial.print(F("Spooder Service: 'spooder.tcp' port:"));
+                    Serial.print(websocketsPort);
+                    Serial.println(F(" install succeeded."));
+
+                    //Configure websockets server and clients
+                    webSocketsServer.listen(websocketsPort);
+
+                    Serial.print(F("Websocket server is "));
+                    Serial.print(webSocketsServer.available() ? "" : "not ");
+                    Serial.println("started.");
+                    Serial.print(F("Max number of clients: "));
+                    Serial.println(maxClients);
+
+                    //globalPrintMemory("Before client instantiation");
+
+                    //create clients dynamically
+                    for (uint8_t i = 0; i < maxClients; i++)
+                    {
+                        WebsocketsClient client;
+                        webSocketsClientsVector.push_back(client);
+                    }
+                    //globalPrintMemory("After client instantiation");
+                    //configure udp packet handler
+                    // Udp.begin(localUdpPort);
+                    //Serial.println(F("Listening udp packets."));
+                    //updateUdp = true;
+
+                    /*
+                    Websocket server is started.
+                    Max number of clients: 20
+                    Before client instantiation Heap: 31616    Block: 31336
+                    After client instantiation Heap: 25496    Block: 21464
+                    */
+
+                    // Enable websockets server handling
+
+                    updateWebsockets = true;
+                    enableSpooderServer = true;
+                }
+                else
+                {
+                    Serial.print(F("Spooder Service: 'spooder.tcp' port:"));
+                    Serial.print(websocketsPort);
+                    Serial.println(F(" install failed."));
+                    enableSpooderServer = false;
+                    spooderService = 0;
+                }
+            }
+            else
+            {
+                Serial.println(F("Spooder Service already exists."));
+                enableSpooderServer = true;
+            }
+        }
+    }    //turn on Spooder Server
+    else //trun off Spooder Server
+    {
+        if (enableSpooderServer == true) //disable Spooder Server
+        {
+            if (spooderService)
+            {
+                MDNS.removeService(spooderService);
+                MDNS.announce();
+                Serial.println(F("Spooder Service: 'spooder.tcp' removed."));
+                //globalPrintMemory("Before client removal"); // Heap: 25872    Block: 22096
+                std::vector<WebsocketsClient>().swap(webSocketsClientsVector); //This frees up memory
+                //globalPrintMemory("After client removal"); //Heap: 31992    Block: 30184
+                spooderService = 0;
+                updateWebsockets = false;
+                enableSpooderServer = false;
+            }
+            else
+            {
+                Serial.println(F("Spooder Service not running."));
+                updateWebsockets = false;
+                enableSpooderServer = false;
+            }
+        }
+        else //Spooder Server not enabled
+        {
+            Serial.println(F("Spooder Server already disabled."));
+        }
+    } //trun off Spooder Server
     return;
 }
 void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
@@ -1272,13 +1969,13 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             {
             case FIRMWARE_UPDATE_MENU_CHECK_NOW:
             {
-                checkGithubLatestRelease(true, false);
+                checkGithubLatestRelease(true, false, false, false);
                 displayPage(currentPage);
                 break;
             }
             case FIRMWARE_UPDATE_MENU_UPDATE_NOW:
             {
-                checkGithubLatestRelease(false, true);
+                checkGithubLatestRelease(false, true, false, false);
                 displayPage(currentPage);
                 break;
             }
@@ -1343,6 +2040,22 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
                 setWebServer(getOptionsSetting(OPTIONS_MENU_WEB_SERVER)); //turn web server on or off
+                break;
+            }
+            case OPTIONS_MENU_SPOODER_CLIENT:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                displayPage(PAGE_OPTIONS);
+                setSpooderClient(getOptionsSetting(OPTIONS_MENU_SPOODER_CLIENT)); //turn Spooder Client on or off
+                break;
+            }
+            case OPTIONS_MENU_SPOODER_SERVER:
+            {
+                //Toogle the selected settings
+                setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
+                displayPage(PAGE_OPTIONS);
+                setSpooderServer(getOptionsSetting(OPTIONS_MENU_SPOODER_SERVER)); //turn Spooder Server on or off
                 break;
             }
             case OPTIONS_MENU_ARDUINO_OTA:
@@ -1428,9 +2141,14 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                     Serial.println(F("off."));
                 }
                 break;
-            case DEBUG_QUERY_MDNS:
-                //drawOverlay("Query", "mDNS", 1000);
-                queryMDNS();
+            case DEBUG_STATIC_QUERY_MDNS:
+                staticQueryMDNS();
+                break;
+            case DEBUG_REMOVE_STATIC_QUERY:
+                removeStaticQuery();
+                break;
+            case DEBUG_LIST_DYNAMIC_QUERY_ANSWER:
+                listMDNSDynamicQueryAnswer();
                 break;
             case DEBUG_UPDATE_SERVICE_TXT:
                 //drawOverlay("Update", "Srvc Txt", 1000);
@@ -1440,17 +2158,26 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 //drawOverlay("Print", "Spooders", 1000);
                 printSpoodersDataset();
                 break;
-            case DEBUG_CHECK_GITHUB_VERSION:
-                checkGithubLatestRelease(true, false);
+            case DEBUG_CHECK_DATA_FOLDER:
+                checkGithubLatestRelease(false, false, true, false);
                 break;
-            case DEBUG_UPDATE_FROM_GITHUB:
-                checkGithubLatestRelease(false, true);
+            case DEBUG_UPDATE_DATA_FOLDER:
+                checkGithubLatestRelease(false, false, true, true);
                 break;
             case DEBUG_PRINT_MEMORY:
                 globalPrintMemory("Debug print memory:");
                 break;
-            case DEBUG_SERVICES:
+            case DEBUG_MANAGE_LOCAL_FILES:
+                manageLocalFileInfo();
+                break;
+            case DEBUG_RESERVED_1:
 
+                break;
+            case DEBUG_RESERVED_2:
+
+                break;
+            case DEBUG_LIST_SPOODER_SERVICE:
+                //listSpooderService();
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -1459,10 +2186,6 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             }
             break;
-        case PAGE_DEBUG_SERVICES:
-        {
-            break; //case PAGE_DEBUG_SERVICES:
-        }
         }
         break; //case SINGLE_CLICK:
     case DOUBLE_CLICK:
@@ -1793,11 +2516,6 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 
             break;
         }
-        case PAGE_DEBUG_SERVICES:
-        {
-
-            break;
-        }
 
         } //switch (currentPage)
         break;
@@ -2116,11 +2834,6 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                 }
                 setPage(PAGE_DEBUG);
             }
-            break;
-        }
-        case PAGE_DEBUG_SERVICES:
-        {
-
             break;
         }
 
@@ -2836,10 +3549,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawDisplay();
         break;
     }
-    case PAGE_DEBUG_SERVICES:
-    {
-        break;
-    }
+
     default:
         break;
     }
@@ -3276,6 +3986,8 @@ void FILAMENT_ESTIMATOR::dumpSetting()
     Serial.println(setting.optionsBLYNK);
     Serial.print(F("  - optionsWebServer: "));
     Serial.println(setting.optionsWebServer);
+    Serial.print(F("  - optionsSpooderClient: "));
+    Serial.println(setting.optionsSpooderClient);
     Serial.print(F("  - optionsArduinoOTA: "));
     Serial.println(setting.optionsArduinoOTA);
     Serial.print(F("  - optionsAutoHomepage: "));
@@ -3387,7 +4099,8 @@ void FILAMENT_ESTIMATOR::_listDir(const char *dirname, uint8_t level)
             Serial.print("<");
             Serial.print(dir.fileName());
             Serial.println(">");
-            _listDir((dirname + String("/") + dir.fileName()).c_str(), level);
+            String subDir = (String(dirname) + String("/") + dir.fileName());
+            _listDir(subDir.c_str(), level);
         }
     }
 
@@ -4532,6 +5245,10 @@ uint8_t FILAMENT_ESTIMATOR::getStddevCount(float threshold)
 }
 void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
 {
+    if (setting.optionsBLYNK == false)
+    {
+        return;
+    }
     if (!Blynk.connected())
     {
         Serial.println(F("Failed. Blynk not connected."));
@@ -4658,117 +5375,34 @@ void FILAMENT_ESTIMATOR::setNotificationSetting(uint8_t selection, bool value)
     }
     saveToEEPROM();
 }
-void FILAMENT_ESTIMATOR::queryMDNS()
-{
-    if (MDNS.isRunning() == true)
-    {
-        Serial.println(F("Query 'spooder' services in the local network:"));
-        int n = MDNS.queryService("spooder", "tcp"); // Send out query for esp tcp services
-        Serial.println(F("mDNS query done."));
-        if (n == 0)
-        {
-            Serial.println("No services found.");
-        }
-        else //services found
-        {
-            Serial.print(n);
-            Serial.println(" service(s) found");
-            for (int i = 0; i < n; ++i)
-            {
-                // Print details for each service found
-                Serial.print(i + 1);
-                Serial.print(": ");
-                Serial.print(MDNS.answerHostname(i));
-                Serial.print(" (");
-                Serial.print(MDNS.answerIP(i));
-                Serial.print(":");
-                Serial.print(MDNS.answerPort(i));
-                //Serial.print(") TXT:");
-                //Serial.print(MDNS.answerTxts())
-
-                Serial.println();
-            }
-        }
-    }
-    else //MDNS is not running on this device
-    {
-        Serial.println(F("Failed. mDNS is not running."));
-    }
-    return;
-}
-void FILAMENT_ESTIMATOR::updateServiceTxt()
-{
-    if (MDNS.isRunning() == false)
-    {
-        Serial.println(F("Failed. mDNS is not running."));
-        return;
-    }
-
-    Serial.print(F("Update mDNS service txt: filament,"));
-    Serial.print((int16_t)filamentWeight);
-    Serial.println();
-
-    MDNS.addServiceTxt(spooderService, "filament", (int16_t)filamentWeight);
-    // 'announce' can be called every time, the configuration of some service
-    // changes. Mainly, this would be changed content of TXT items.
-    MDNS.announce();
-    return;
-}
-void FILAMENT_ESTIMATOR::printSpoodersDataset()
-{
-    if (MDNS.isRunning() == false)
-    {
-        Serial.println(F("Failed. mDNS is not running."));
-        return;
-    }
-    globalPrintSpoodersDataset();
-    return;
-}
-void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate)
+void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate, bool checkDataFolder, bool updateDataFolder)
 {
 
-    Serial.println(F("Checking github latest release version:"));
     drawOverlay("Checking", "Github", 2000);
 
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        Serial.println(F("WiFi not connected."));
-        drawOverlay("Failed", "", 2000);
-        return;
-    }
-    if (LittleFS.begin())
-    {
-        //Serial.println("LittleFS ok.");
-        //listDir("");
-    }
-    else
-    {
-        Serial.println(F("LittleFS failed."));
-        drawOverlay("Failed", "", 2000);
-        return;
-    }
-    if (netWorkTimeReceived == false)
-    {
-        Serial.println(F("Network time not configured."));
-        drawOverlay("Failed", "", 2000);
-        return;
-    }
+    //globalPrintMemory("Before certStore");
 
-    BearSSL::CertStore certStore;
+    // A single, global CertStore which can be used by all
+    // connections.  Needs to stay live the entire time any of
+    // the WiFiClientBearSSLs are present.
+    BearSSL::CertStore certStore; //takes only 16 bytes
     _certStore = &certStore;
-    numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
-    //Serial.print(F("Number of CA certs read: "));
-    //Serial.println(numCerts);
-    if (numCerts == 0)
+
+    //globalPrintMemory("After certStore");
+
+    if (checkGithubConnectionPrerequisite() == false) //certs read takes 50 bytes
     {
-        Serial.println(F("No CA certs found. Unable to establish https connection."));
-        drawOverlay("Failed", "", 2000);
         return;
     }
-    //globalPrintMemory("After certs read");          //about 36k left
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("After certs read");
+
     BearSSL::WiFiClientSecure client; //7k memory required
-    //globalPrintMemory(F("After client creation.")); //about 29k left
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory(F("After client creation.")); //about 26k left
     client.setCertStore(_certStore);
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("After client setCertStore."); //same, 26k left
 
     //Try to reduce connection memory usage
     //Checking MFLN support
@@ -4779,7 +5413,7 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
         client.setBufferSizes(512, 512);
     }
 
-    if (!client.connect(githubHost, githubPort)) //22k memory required
+    if (!client.connect(githubHost, githubPort)) //5k memory required (22k without MFLN)
     {
         Serial.println(F("Connection to gitgub failed."));
         drawOverlay("Failed", "", 2000);
@@ -4801,13 +5435,17 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             }
         }
     }
-    //globalPrintMemory("After client connection"); //about 24k left
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("After client connection"); //about 20k left
 
-    //Start to check github
-    String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest"; //has to use readStringUntil('\n'), otherwise buffer overflow result in nothing can be printed
-
-    if (forceCheck == true || githubUpdateAvailable == false)
+    //check firmware
+    if (forceCheck == true || (githubUpdateAvailable == false && doUpdate == true))
     {
+        //Start to check github
+
+        Serial.println(F("Checking github latest release version:"));
+
+        String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest"; //has to use readStringUntil('\n'), otherwise buffer overflow result in nothing can be printed
 
         //rate limit to 60 calls per hour
         //fetch the X-RateLimit-Remaining value
@@ -4816,11 +5454,15 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                      "User-Agent: FuzzySpooder\r\n" +
                      "Connection: close\r\n\r\n");
         //fetch the http header
-        uint8_t limitRemaining = 0;
-        uint16_t contentLength = 0;
+        uint8_t releaseLimitRemaining = 0;
+        uint16_t releaseContentLength = 0;
         while (client.connected())
         {
             String response = client.readStringUntil('\n');
+            if (DEBUG_PRINT_GITHUB_CONTENT == true)
+            {
+                Serial.println(response);
+            }
             if (response == "\r")
             {
                 break;
@@ -4830,22 +5472,22 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                 //response looks like this:
                 //X-RateLimit-Remaining: 56
                 String sub = response.substring(response.indexOf(" ") + 1);
-                limitRemaining = sub.toInt();
-                Serial.print(F("X-RateLimit-Remaining: "));
-                Serial.println(limitRemaining);
+                releaseLimitRemaining = sub.toInt();
+                //Serial.print(F("X-RateLimit-Remaining: "));
+                //Serial.println(limitRemaining);
             }
             if (response.indexOf("Content-Length:") == 0)
             {
                 //response looks like this:
                 //Content-Length: 3799
                 String sub = response.substring(response.indexOf(" ") + 1);
-                contentLength = sub.toInt();
+                releaseContentLength = sub.toInt();
                 //Serial.print(F("Content-Length: "));
                 //Serial.println(contentLength);
             }
         }
         //Check RAM
-        if (ESP.getFreeHeap() > (contentLength + 2048))
+        if (ESP.getFreeHeap() > (releaseContentLength + 2048))
         {
             //ok, with 2k reserve
         }
@@ -4856,7 +5498,7 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             globalPrintMemory("");
             return;
         }
-        uint16_t capacity = contentLength + 2048; //https://arduinojson.org/v6/assistant/
+        uint16_t capacity = releaseContentLength + 2048; //https://arduinojson.org/v6/assistant/
         DynamicJsonDocument doc(capacity);
 
         //fetch the github release json doc
@@ -4875,17 +5517,20 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                 }
             }
         }
-        //globalPrintMemory("After deserializeJson"); //18k using stream deserialization
+        globalPrintMemory("After deserializeJson"); //Heap: 14888    Block: 12040
         //client.stop(); //increases 5k RAM
         //globalPrintMemory("After client.stop()");   //23k left,
 
         //print the content
-        //serializeJsonPretty(doc, Serial);
-        //Serial.println();
+        if (DEBUG_PRINT_GITHUB_CONTENT == true)
+        {
+            serializeJsonPretty(doc, Serial);
+            Serial.println();
+        }
 
         //globalPrintMemory("Before doc.containsKey('tag_name')"); //Heap: 18312    Block: 18128
         //RAM release ok at this point
-
+        //Fetch the content
         if (doc.containsKey("tag_name"))
         {
             String releaseTag = doc["tag_name"];
@@ -4939,7 +5584,7 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                 return;
             }
         }
-        else //if (doc.containsKey("tag_name"))
+        else //if (!doc.containsKey("tag_name"))
         {
             Serial.println(F("No tag_name found."));
             githubVersionObtained = false;
@@ -4947,138 +5592,152 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             drawOverlay("Failed", "", 2000);
             return;
         }
-    } //if (forceCheck == true || githubUpdateAvailable == false)
 
-    //globalPrintMemory("After doc.containsKey('tag_name')"); //Heap: 23592    Block: 23168
-    //After checkGithubLatestRelease(): Heap: 35368    Block: 34768
+        //resolve redirects
+        //splitURL = _urlDetails(_updateURL); //Could be sourece of RAM fragmentation
+        //_updateURL requires some 513 bytes to hold the URL
+        //If used locally, spooder cannot perform seperated check/update operation.
+        //If used globally, need to reserved large enough RAM to prevent RAM fragmentation
+        //So _updateURL String size 768 is used here, globally.
 
-    //return; //Memory release ok at this point
-
-    //resolve redirects
-    //splitURL = _urlDetails(_updateURL); //Could be sourece of RAM fragmentation
-    //_updateURL requires some 513 bytes to hold the URL
-    //If used locally, spooder cannot perform seperated check/update operation.
-    //If used globally, need to reserved large enough RAM to prevent RAM fragmentation
-    //So String size 768 is used here.
-
-    String proto = "";
-    int port = 80;
-    if (_updateURL.startsWith("http://"))
-    {
-        proto = "http://";
-        _updateURL.replace("http://", "");
-    }
-    else
-    {
-        proto = "https://";
-        port = 443;
-        _updateURL.replace("https://", "");
-    }
-    int firstSlash = _updateURL.indexOf('/');
-    String host = _updateURL.substring(0, firstSlash);
-    String path = _updateURL.substring(firstSlash);
-
-    bool isFinalURL = false;
-
-    while (!isFinalURL)
-    {
-        if (!client.connect(host, port))
+        //Serial.print(F("_updateURL = "));
+        //Serial.println(_updateURL);
+        /* _updateURL example: 515 bytes
+        _updateURL = https://github-releases.githubusercontent.com/347605015/
+        c6847f91-dac8-43b9-a55e-7bdae94af08f?X-Amz-Algorithm=AWS4-HMAC-SHA256&X
+        -Amz-Credential=AKIAIWNJYAX4CSVEH53A%2F20210829%2Fus-east-1%2Fs3%2Faws4
+        _request&X-Amz-Date=20210829T150643Z&X-Amz-Expires=300&X-Amz-Signature=
+        8286df8a22c44df7b53c6ad9e4747923bc8120459d11ad96c5f7085a51b30082&X-Amz-
+        SignedHeaders=host&actor_id=0&key_id=0&repo_id=347605015&response-content
+        -disposition=attachment%3B%20filename%3Dfirmware.bin&response-content-
+        type=application%2Foctet-stream
+        */
+        String proto = "";
+        int port = 80;
+        if (_updateURL.startsWith("http://"))
         {
-            Serial.println(F("Client connection Failed."));
-            return;
+            proto = "http://";
+            _updateURL.replace("http://", "");
         }
-
-        client.print(String("GET ") + path + " HTTP/1.1\r\n" +
-                     "Host: " + host + "\r\n" +
-                     "User-Agent: FuzzySpooder\r\n" +
-                     "Connection: close\r\n\r\n");
-
-        while (client.connected())
+        else
         {
-            String response = client.readStringUntil('\n');
-            if (response.startsWith("location: ") || response.startsWith("Location: "))
+            proto = "https://";
+            port = 443;
+            _updateURL.replace("https://", "");
+        }
+        int firstSlash = _updateURL.indexOf('/');
+        String host = _updateURL.substring(0, firstSlash);
+        String path = _updateURL.substring(firstSlash);
+
+        bool isFinalURL = false;
+
+        while (!isFinalURL)
+        {
+            if (!client.connect(host, port))
             {
-                isFinalURL = false;
-                String location = response;
-                if (response.startsWith("location: "))
-                {
-                    location.replace("location: ", "");
-                }
-                else
-                {
-                    location.replace("Location: ", "");
-                }
-                location.remove(location.length() - 1);
+                Serial.println(F("Client connection Failed."));
+                return;
+            }
 
-                if (location.startsWith("http://") || location.startsWith("https://"))
-                {
-                    //absolute URL - separate host from path
-                    //urlDetails_t url = _urlDetails(location);
+            client.print(String("GET ") + path + " HTTP/1.1\r\n" +
+                         "Host: " + host + "\r\n" +
+                         "User-Agent: FuzzySpooder\r\n" +
+                         "Connection: close\r\n\r\n");
 
-                    int port = 80;
-                    if (location.startsWith("http://"))
+            while (client.connected())
+            {
+                String response = client.readStringUntil('\n');
+                if (response.startsWith("location: ") || response.startsWith("Location: "))
+                {
+                    isFinalURL = false;
+                    String location = response;
+                    if (response.startsWith("location: "))
                     {
-                        proto = "http://";
-                        location.replace("http://", "");
+                        location.replace("location: ", "");
                     }
                     else
                     {
-                        proto = "https://";
-                        port = 443;
-                        location.replace("https://", "");
+                        location.replace("Location: ", "");
                     }
-                    int firstSlash = location.indexOf('/');
-                    host = location.substring(0, firstSlash);
-                    path = location.substring(firstSlash);
+                    location.remove(location.length() - 1);
+
+                    if (location.startsWith("http://") || location.startsWith("https://"))
+                    {
+                        //absolute URL - separate host from path
+                        //urlDetails_t url = _urlDetails(location);
+
+                        int port = 80;
+                        if (location.startsWith("http://"))
+                        {
+                            proto = "http://";
+                            location.replace("http://", "");
+                        }
+                        else
+                        {
+                            proto = "https://";
+                            port = 443;
+                            location.replace("https://", "");
+                        }
+                        int firstSlash = location.indexOf('/');
+                        host = location.substring(0, firstSlash);
+                        path = location.substring(firstSlash);
+                    }
+                    else
+                    {
+                        //relative URL - host is the same as before, location represents the new path.
+                        path = location;
+                    }
+                    //leave the while loop so we don't set isFinalURL on the next line of the header.
+                    break;
                 }
                 else
                 {
-                    //relative URL - host is the same as before, location represents the new path.
-                    path = location;
+                    //location header not present - this must not be a redirect. Treat this as the final address.
+                    isFinalURL = true;
                 }
-                //leave the while loop so we don't set isFinalURL on the next line of the header.
-                break;
-            }
-            else
-            {
-                //location header not present - this must not be a redirect. Treat this as the final address.
-                isFinalURL = true;
-            }
-            if (response == "\r")
-            {
-                break;
+                if (response == "\r")
+                {
+                    break;
+                }
             }
         }
-    }
-    if (isFinalURL)
-    {
-        String finalURL = proto + host + path;
-        _updateURL = finalURL; //Not the source of RAM fragment problem
-    }
-    else
-    {
-        Serial.println(F("URL unresolved."));
-        drawOverlay("Failed", "", 2000);
-        return;
-    }
+        if (isFinalURL)
+        {
+            String finalURL = proto + host + path;
+            _updateURL = finalURL; //Not the source of RAM fragment problem
+        }
+        else
+        {
+            Serial.println(F("URL unresolved."));
+            drawOverlay("Failed", "", 2000);
+            return;
+        }
 
-    //Serial.print(F("_updateURL = "));
-    //Serial.println(_updateURL);
-    /* _updateURL example: 515 bytes
-    _updateURL = https://github-releases.githubusercontent.com/347605015/
-    c6847f91-dac8-43b9-a55e-7bdae94af08f?X-Amz-Algorithm=AWS4-HMAC-SHA256&X
-    -Amz-Credential=AKIAIWNJYAX4CSVEH53A%2F20210829%2Fus-east-1%2Fs3%2Faws4
-    _request&X-Amz-Date=20210829T150643Z&X-Amz-Expires=300&X-Amz-Signature=
-    8286df8a22c44df7b53c6ad9e4747923bc8120459d11ad96c5f7085a51b30082&X-Amz-
-    SignedHeaders=host&actor_id=0&key_id=0&repo_id=347605015&response-content
-    -disposition=attachment%3B%20filename%3Dfirmware.bin&response-content-
-    type=application%2Foctet-stream
-    */
+    } //if (forceCheck == true || githubUpdateAvailable == false)
+
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("After tag check"); //Heap: 20432    Block: 19944
+
+    //RAM release ok only tag check: Heap: 32112    Block: 30192
+
+    //Check Data Folder
+    if (checkDataFolder == true)
+    {
+        // root/sub folders to sync
+        String pathData = "/data";
+        listGitgubContent(client, pathData, updateDataFolder);
+        //String pathImages = "/data/images";
+        //listGitgubContent(client, pathImages, updateDataFolder)
+
+    } //if (getDataFolder == true)
+
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("After data fetching: ");
 
     //globalPrintMemory("Before update:"); //Heap: 21040    Block: 19640 (without update)
     //return; //Heap: 34800    Block: 34472 if return here
 
-    //Do the update
+    //Update firmware
     if (githubUpdateAvailable == true && doUpdate == true)
     {
         ESP8266HTTPUpdate ESPhttpUpdate; //use local instance to free up RAM
@@ -5114,6 +5773,438 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
     //globalPrintMemory("After update:"); //Heap: 21040    Block: 19640
     return;
 }
+void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, String &path, bool updateDataFolder)
+{
+    //Getting contents of \data folder
+
+    Serial.print(F("Getting contents of "));
+    Serial.println(path);
+    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+        globalPrintMemory("data");
+    if (!client.connect(githubHost, githubPort))
+    {
+        Serial.println(F("Client connection Failed."));
+        return;
+    }
+    String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/contents" + path;
+    //String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/images?ref=main"; //subfolder requires ref
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + githubHost + "\r\n" +
+                 "User-Agent: FuzzySpooder\r\n" +
+                 "Connection: close\r\n\r\n");
+
+    //fetch the http header
+    uint8_t dataLimitRemaining = 0;
+    uint16_t dataContentLength = 0;
+    while (client.connected())
+    {
+        String response = client.readStringUntil('\n');
+        if (DEBUG_PRINT_GITHUB_CONTENT == true)
+        {
+            Serial.println(response);
+        }
+        if (response == "\r")
+        {
+            break;
+        }
+        if (response.indexOf("X-RateLimit-Remaining:") == 0)
+        {
+            //response looks like this:
+            //X-RateLimit-Remaining: 56
+            String sub = response.substring(response.indexOf(" ") + 1);
+            dataLimitRemaining = sub.toInt();
+            //Serial.print(F("X-RateLimit-Remaining: "));
+            //Serial.println(limitRemaining);
+        }
+        if (response.indexOf("Content-Length:") == 0)
+        {
+            //response looks like this:
+            //Content-Length: 3799
+            String sub = response.substring(response.indexOf(" ") + 1);
+            dataContentLength = sub.toInt();
+            //Serial.print(F("Content-Length: "));
+            //Serial.println(contentLength);
+        }
+    }
+    //Check RAM
+    if (ESP.getFreeHeap() > (dataContentLength + 2048))
+    {
+        //ok, with 2k reserve
+    }
+    else
+    {
+        Serial.print(F("Not enough memory to parse json doc."));
+        drawOverlay("Failed", "", 2000);
+        globalPrintMemory("");
+        return;
+    }
+    uint16_t capacity = dataContentLength + 2048; //https://arduinojson.org/v6/assistant/
+    DynamicJsonDocument doc(capacity);
+
+    //fetch the github release json doc
+    while (client.connected())
+    {
+        if (client.available())
+        {
+            DeserializationError error;
+            error = deserializeJson(doc, client.readStringUntil('\n')); //no RAM/speed difference using Stream or String
+            if (error != error.Ok)
+            {
+                Serial.print(F("Deserialization error: "));
+                drawOverlay("Failed", "", 2000);
+                Serial.println(error.c_str());
+                return;
+            }
+        }
+    }
+
+    //print the content
+    if (DEBUG_PRINT_GITHUB_CONTENT == true)
+    {
+        serializeJsonPretty(doc, Serial);
+        Serial.println();
+    }
+
+    //JsonObject object = doc.as<JsonObject>();
+    /*
+        for (JsonObject item : doc.as<JsonArray>())
+        {
+
+            const char *name = item["name"]; // "certs.ar", "config.json", "edit", "favicon.ico", "images", ...
+            const char *path = item["path"]; // "data/certs.ar", "data/config.json", "data/edit", ...
+            const char *sha = item["sha"];   // "1ee8be5142f1f05ac8a9453e509beee04ad1fa4a", ...
+            long size = item["size"];        // 173138, 568, 0, 15406, 0, 64
+            const char *url = item["url"];
+            const char *html_url = item["html_url"];
+            const char *git_url = item["git_url"];
+            const char *download_url = item["download_url"];
+            const char *type = item["type"]; // "file", "file", "dir", "file", "dir", "file"
+
+            JsonObject links = item["_links"];
+            const char *links_self = links["self"];
+            const char *links_git = links["git"];
+            const char *links_html = links["html"];
+
+            Serial.print(F("name = "));
+            Serial.print(name);
+            Serial.print("\t");
+
+            Serial.print(F("type = "));
+            Serial.print(type);
+            Serial.print("\t");
+
+            Serial.print(F("path = "));
+            Serial.print(path);
+            Serial.print("\t");
+
+            Serial.println();
+        }
+        */
+
+    JsonArray remoteArr = doc.as<JsonArray>();
+    /*
+    uint8_t numberOfFiles = 0;
+    uint8_t numberOfDir = 0;
+    for (uint8_t i = 0; i < remoteArr.size(); i++)
+    {
+        if (strncmp((const char *)remoteArr.getElement(i).getMember("type"), "file", 4) == 0)
+        {
+            numberOfFiles++;
+        }
+        if (strncmp((const char *)remoteArr.getElement(i).getMember("type"), "dir", 3) == 0)
+        {
+            numberOfDir++;
+        }
+        //Serial.println((const char *)remoteArr.getElement(i).getMember("path"));
+    }
+    Serial.print(F("Total "));
+    Serial.print(numberOfFiles);
+    Serial.print(F(" file(s), and "));
+    Serial.print(numberOfDir);
+    Serial.println(F(" dir(s)."));
+    */
+
+    manageLocalFileInfo();
+
+    File localFileInfo = LittleFS.open(localFileInfoPath, "r");
+    DynamicJsonDocument localFileDoc(2048);
+    deserializeJson(localFileDoc, localFileInfo);
+    JsonArray localArr = localFileDoc.as<JsonArray>();
+
+    for (JsonObject remoteFileObj : remoteArr)
+    {
+        if (remoteFileObj.getMember("type") == "file")
+        {
+            String remoteName = remoteFileObj.getMember("name");
+            String remotePath = remoteFileObj.getMember("path");
+            String sha = remoteFileObj.getMember("sha");
+            Serial.print(F("checking "));
+            Serial.print(remotePath);
+            Serial.print(F(" "));
+            Serial.println(sha);
+            bool excluded = false;
+            if (remoteName == "config.json")
+            {
+                excluded = true;
+            }
+            if (excluded == true)
+            {
+                Serial.println(F("Excluded."));
+            }
+            else // excluded == false
+            {
+                for (JsonObject localFileObj : localArr)
+                {
+                    if (localFileObj.getMember("path") == remotePath)
+                    {
+                        Serial.println(F("File info found."));
+                        if (localFileObj.getMember("sha") == "")
+                        {
+                            //first time checking github, putting github sha into local file info
+                            localFileObj["sha"] = remoteFileObj.getMember("sha");
+                            Serial.print(F("Update \"sha\" to"));
+                            Serial.println((const char *)localFileObj.getMember("sha"));
+                        }
+                    }
+                    else
+                    {
+                        //Serial.println(F("Not found in local file info."));
+                    }
+                } //for (JsonObject localFileObj : localArr)
+            }
+
+        } //if (remoteFileObj.getMember("type") == "file")
+
+    } //for (JsonObject remoteFileObj : remoteArr)
+
+    serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    Serial.println();
+    //todo steps
+    //1. list github  directory
+
+    //2. if listed item is a file, push the item into a json doc
+
+    //3. iterate json doc items
+    //4 omit these files
+    //  - config.json
+    //5. compare each item with items in the localfiles.json
+    //6. if the tag is different, download the file from github to esp8266 file system
+    //7. update the new tag in localfiles.json
+
+    //downliod a test file
+    //imported from https://forum.arduino.cc/t/nodemcu-esp8266-downloading-an-image-file-to-spiffs/543405/2
+
+    //https://api.github.com/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/testdoc.txt?ref=main
+    //https://github.com/FuzzyNoodle/Fuzzy-Spooder/blob/main/data/testdoc.txt
+    //https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt
+    if (updateDataFolder == true)
+    {
+        HTTPClient http;
+        //url = "https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt";
+        String url = "https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/images/logo.bmp";
+
+        String fileName = "/logo.bmp";
+
+        Serial.println("[HTTP] begin...\n");
+        Serial.println(fileName);
+        Serial.println(url);
+        http.begin(client, url);
+
+        Serial.printf("[HTTP] GET...\n", url.c_str());
+        // start connection and send HTTP header
+        int httpCode = http.GET();
+        if (httpCode > 0)
+        {
+            // HTTP header has been send and Server response header has been handled
+            Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+            Serial.printf("[FILE] open file for writing %d\n", fileName.c_str());
+
+            File file = LittleFS.open(fileName, "w");
+
+            // file found at server
+            if (httpCode == HTTP_CODE_OK)
+            {
+
+                // get lenght of document (is -1 when Server sends no Content-Length header)
+                int len = http.getSize();
+
+                // create buffer for read
+                uint8_t buff[128] = {0};
+
+                // get tcp stream
+                WiFiClient *stream = http.getStreamPtr();
+
+                // read all data from server
+                while (http.connected() && (len > 0 || len == -1))
+                {
+                    // get available data size
+                    size_t size = stream->available();
+                    if (size)
+                    {
+                        // read up to 128 byte
+                        int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
+                        // write it to Serial
+                        //Serial.write(buff, c);
+                        file.write(buff, c);
+                        if (len > 0)
+                        {
+                            len -= c;
+                        }
+                    }
+                    delay(1);
+                }
+
+                Serial.println();
+                Serial.println("[HTTP] connection closed or file end.");
+                Serial.println("[FILE] closing file");
+                file.close();
+            }
+        }
+        http.end();
+    }
+}
+void FILAMENT_ESTIMATOR::manageLocalFileInfo()
+{
+    if (!LittleFS.begin())
+    {
+        Serial.println(F("LittleFS failed."));
+        drawOverlay("Failed", "", 2000);
+        return;
+    }
+    Serial.println(F("Managing local files:"));
+    //1.open localfile.json as JSONDOC
+    //2.iterate through FS dir, if exist in json, add to json
+    //3.iterate through localfile.json, if not exist in FS, remove json
+    //4.save localfile.json
+
+    //listDir("");
+
+    //1.open localfile.json
+    //Serial.println(F("Listing localfiles.json:"));
+    File localFileInfo = LittleFS.open(localFileInfoPath, "r");
+    //todo dertimine size
+    DynamicJsonDocument localFileDoc(2048);
+    deserializeJson(localFileDoc, localFileInfo);
+    //serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    //Serial.println();
+    LOCAL_FILE_INFO_STRUCT fInfo;
+    //2.iterate through FS dir
+    Serial.println(F("Iterate through local files:"));
+
+    iterateLocalFiles("/", localFileDoc);
+
+    //Serial.println(F("Listing new localfiles.json:"));
+    //serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    //Serial.println();
+
+    //3.iterate through localfile.json, if not exist in FS, remove json
+    Serial.println(F("Iterate through fileinfo.json:"));
+    JsonArray arr = localFileDoc.as<JsonArray>();
+    uint8_t indexToRemove = 0;
+    for (JsonObject objInFile : arr)
+    {
+        String path = objInFile.getMember("path");
+        if (path)
+        {
+            //path contains "data/" for all files, however, FS does not. Need to remove this.
+            String fsPath = path.substring(5);
+            if (!LittleFS.open(fsPath, "r"))
+            {
+                Serial.print(path);
+                Serial.println(F(" does not exist, info removed."));
+                arr.remove(indexToRemove);
+            }
+        }
+        indexToRemove++;
+    }
+
+    //4.save localfile.json
+    localFileInfo = LittleFS.open(localFileInfoPath, "w");
+    serializeJsonPretty(localFileDoc, localFileInfo);
+}
+void FILAMENT_ESTIMATOR::iterateLocalFiles(String dirname, DynamicJsonDocument &localFileDoc)
+{
+    Dir dir = LittleFS.openDir(dirname);
+    while (dir.next())
+    {
+        if (dir.isFile())
+        {
+            String name = dir.fileName();
+            String path = "data"; //github path includes filename
+            if (dirname == "/")
+            {
+                path += "/";
+            }
+            else
+            {
+                path += dirname + "/";
+            }
+            path += name;
+
+            //check if the obj already exist
+            JsonArray arr = localFileDoc.as<JsonArray>();
+            bool isExist = false;
+            for (JsonObject objInFile : arr)
+            {
+                if (objInFile.getMember("path") == path)
+                {
+                    isExist = true;
+                }
+            }
+            if (isExist == true)
+            {
+                //Serial.print(path);
+                //Serial.println(isExist ? " exists." : " does not exist.");
+            }
+            else //does not exist, add a new object
+            {
+                JsonObject obj = localFileDoc.createNestedObject();
+                obj["name"] = name;
+                obj["path"] = path;
+                obj["sha"] = "";
+                Serial.print(path);
+                Serial.println(F(" added to localfile.json."));
+            }
+        }
+        else //isDirectory()
+        {
+            String subDir = (String(dirname) + dir.fileName());
+            iterateLocalFiles(subDir, localFileDoc);
+        }
+    }
+}
+bool FILAMENT_ESTIMATOR::checkGithubConnectionPrerequisite()
+{
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println(F("WiFi not connected."));
+        drawOverlay("Failed", "", 2000);
+        return false;
+    }
+    if (!LittleFS.begin())
+    {
+        Serial.println(F("LittleFS failed."));
+        drawOverlay("Failed", "", 2000);
+        return false;
+    }
+    if (netWorkTimeReceived == false)
+    {
+        Serial.println(F("Network time not configured."));
+        drawOverlay("Failed", "", 2000);
+        return false;
+    }
+    numCerts = _certStore->initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
+    //Serial.print(F("Number of CA certs read: "));
+    //Serial.println(numCerts);
+    if (numCerts == 0)
+    {
+        Serial.println(F("No CA certs found. Unable to establish https connection."));
+        drawOverlay("Failed", "", 2000);
+        return false;
+    }
+    return true;
+}
 bool FILAMENT_ESTIMATOR::getOptionsSetting(uint8_t selection)
 {
     bool result = false;
@@ -5130,6 +6221,12 @@ bool FILAMENT_ESTIMATOR::getOptionsSetting(uint8_t selection)
         break;
     case OPTIONS_MENU_WEB_SERVER:
         result = setting.optionsWebServer;
+        break;
+    case OPTIONS_MENU_SPOODER_CLIENT:
+        result = setting.optionsSpooderClient;
+        break;
+    case OPTIONS_MENU_SPOODER_SERVER:
+        result = setting.optionsSpooderServer;
         break;
     case OPTIONS_MENU_ARDUINO_OTA:
         result = setting.optionsArduinoOTA;
@@ -5157,6 +6254,12 @@ void FILAMENT_ESTIMATOR::setOptionsSetting(uint8_t selection, bool value)
         break;
     case OPTIONS_MENU_WEB_SERVER:
         setting.optionsWebServer = value;
+        break;
+    case OPTIONS_MENU_SPOODER_CLIENT:
+        setting.optionsSpooderClient = value;
+        break;
+    case OPTIONS_MENU_SPOODER_SERVER:
+        setting.optionsSpooderServer = value;
         break;
     case OPTIONS_MENU_ARDUINO_OTA:
         setting.optionsArduinoOTA = value;
@@ -5231,9 +6334,20 @@ void FILAMENT_ESTIMATOR::updateAutoGithubCheck()
     if (nextCheckTimeMillis - millis() < 60000)
     {
         //check version on GitHub and update firmware if new version is available
-        checkGithubLatestRelease(true, true);
+        checkGithubLatestRelease(true, true, false, false);
         setNextCheckCountdown(); //in case of update firmware failure
     }
 
     updateAutoGithubCheckTimer = millis();
+}
+void FILAMENT_ESTIMATOR::pause()
+{
+    while (true)
+    {
+        if (Serial.available())
+        {
+            String s = Serial.readString();
+            break;
+        }
+    }
 }

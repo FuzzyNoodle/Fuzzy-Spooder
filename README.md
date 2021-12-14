@@ -3,10 +3,9 @@ An add-on filament estimator for existing 3D printers. It provides filament rema
 
 ---
 ## Getting Started
-
 ### Upload the Spooder Example
-
-#### Using Arduino IDE
+<details>
+<summary>#### Using Arduino IDE</summary>
 
 1. [Install](https://arduino-esp8266.readthedocs.io/en/latest/installing.html) the ESP8266 Arduino Core.
 2. Follow this [tutorial](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) to install the file system uploader, but use [this LittleFS plugin](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin) instead of SPIFFS. 
@@ -23,9 +22,10 @@ An add-on filament estimator for existing 3D printers. It provides filament rema
 
 6. Open the ```File->Examples->Fuzzy Spooder->Spooder``` sketch and upload to your board via USB connection. Correct port needs to be selected.
 7. [Upload](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) the data files in the \data folder too. See below.
+</details>
 
-
-#### Using VSCode IDE + platformio extension
+<details>
+<summary>#### Using VSCode IDE + platformio extension</summary>
 
 1. ```PIO Home-> New Project```
     1. Name: **Spooder** for example
@@ -70,36 +70,54 @@ This creates a more user friendly env:name, increases upload speed and enables s
 ```build_flags = -w``` prevents some compile warnings/errors.
 
 ---
+</details>
 
 ### Upload the data folder to the file system
 The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
 
 For example, the data folder contains:
 - The **logo.bmp** shown during booting. It can be replaced by user.
-- The **config.json** file, where all configurations are edited and stored.
+- The **config.json** file, where all configurations are edited and stored:
+  - Your WiFi SSID/PASSWORD.
+  - Blynk authorizatio code.
+  - Spool holder name/weight presets.
+
 - The **index.html** file for the browser file manager
 
-#### Using Arduino IDE
+<details>
+<summary>#### Using Arduino IDE</summary>
+
 1. Copy the 'data' folder from the 
   - library (ex: ```arduino\libraies\Fuzzy_Spooder```) to your 
   - sketch folder (ex: ```Arduino\Spooder```).
 2. Edit the config.json file in the data folder as required. 
 3. Select the ```Arduino IDE -> Tools ->Flash Size 4MB (FS:1MB OTA:~1019KB)```. This setup is required for OTA.
 3. Use the ```Arduino IDE -> Tools -> ESP8266 LittleFS Data Upload``` command to uplod the file image to esp8266 flash memory. 
+</details>
 
-#### Using VSCode IDE + platformio extension
+<details>
+<summary>#### Using VSCode IDE + platformio extension</summary>
+
 1. Copy the 'data' folder from the 
   - library (ex: ```platformio_project_folder\.pio\libdeps\Spooder\Fuzzy_Spooder```) to your 
   - project folder (ex: ```platformio_project_folder\Spooder```).
 2. Edit the config.json file in the data folder as required. 
 3. Use the ```PlatformIO->PROJECT TASKS->Spooder->Platform->Upload Filesystem Image``` command to uplod the file image. Make SURE you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
+</details>
 
----
+
 ### OTA Upload
-#### Using Arduino IDE
-Follow the IDE upload part in this [tutorial](https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/) to upload the sketch wirelessly.
+Once the OTA (over-the-air) codes are in place, and the device is connected to the local WiFi enviromnet, the ESP can be uploaded wirelessly.
 
-#### Using VSCode IDE + platformio extension
+<details>
+<summary>#### Using Arduino IDE</summary>
+
+Follow the IDE upload part in this [tutorial](https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/) to upload the sketch wirelessly.
+</details>
+
+<details>
+<summary>#### Using VSCode IDE + platformio extension</summary>
+
 Add two lines in your platformio.ini:
 - upload_protocol = espota
 - upload_port = spooderA1.local
@@ -125,12 +143,10 @@ lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 ```
 
 After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload. If the mDNS hostname is not resolved, you can use the IP address.
-
+</details>
 ---
 
 ### Using the Spooder
-
-
 
 
 

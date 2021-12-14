@@ -10,9 +10,10 @@
 #define FILAMENT_ESTIMATOR_H
 
 //Version for this firmware
-#define CURRENT_VERSION "1.0.1"
+#define CURRENT_VERSION "1.0.2"
 
 #include "Arduino.h"
+#include <stdio.h>
 #include <ESP8266WebServer.h>
 
 //Debug switches
@@ -141,8 +142,6 @@
 
 #define PAGE_OPTIONS 90
 
-#define PAGE_DEBUG_SERVICES 100
-
 #define DECLARED_EEPROM_SIZE 64
 #define EEPROM_START_ADDRESS 0
 
@@ -160,12 +159,26 @@
 #define SYMBOL_WIFI_NO_INTERNET_1 3
 #define SYMBOL_WIFI_NO_INTERNET_2 4
 
-//mDNS
+//mDNS and communication between devices
+#define MDNS_SERVICE_TXT_MAXLENGTH 100
 #include <ESP8266mDNS.h>
+#define MAX_NUM_OF_SPOODERS 64 //fix RAM is allocated
+#define DATASET_SPOODER_ID_SIZE 4
+//Has to be global due to sort callback
+struct SPOODERS_DATASET_STRUCT
+{
+  char spooderID[DATASET_SPOODER_ID_SIZE]; //A1, B12, ...
+  int16_t fw;                              //filament weight in gram //2 bytes
+};
+//#include <WiFiUdp.h>
+//#define UDP_PACKET_SIZE_LIMIT 32
+#include <ArduinoWebsockets.h>
+using namespace websockets;
 
 //Github auto update
 #define NO_GLOBAL_HTTPUPDATE //use local instance to free up RAM
 #include <ESP8266httpUpdate.h>
+#include <ESP8266HTTPClient.h>
 typedef struct urlDetails_t
 {
   String proto;
@@ -173,25 +186,7 @@ typedef struct urlDetails_t
   int port;
   String path;
 };
-// A single, global CertStore which can be used by all
-// connections.  Needs to stay live the entire time any of
-// the WiFiClientBearSSLs are present.
-//#include <CertStoreBearSSL.h>
-//#include <ESP_OTA_GitHub.h>
-/* Set up values for your repository and binary names */
 
-//#define GHOTA_USER "FuzzyNoodle"
-//#define GHOTA_REPO "Fuzzy-Spooder"
-//#define GHOTA_CURRENT_TAG CURRENT_VERSION
-//#define GHOTA_BIN_FILE "fuzzy_spooder.bin"
-//#define GHOTA_ACCEPT_PRERELEASE 1
-/*
-#define GHOTA_USER "yknivag"
-#define GHOTA_REPO "ESP_OTA_GitHub_Showcase"
-#define GHOTA_CURRENT_TAG "0.0.0"
-#define GHOTA_BIN_FILE "ESP_OTA_GitHub_Showcase.ino.d1_mini.bin"
-#define GHOTA_ACCEPT_PRERELEASE 0
-*/
 class FILAMENT_ESTIMATOR
 {
 public:
@@ -216,7 +211,7 @@ public:
   void handleNotFound();   //The "Not Found" handler
   void replyOK();
 
-  void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
+  void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo *serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
 
 private:
   //ESP8266WebServer server;
@@ -260,6 +255,8 @@ private:
     uint8_t calibrationWeightIsValid;
     uint8_t automaticUpdateJustPerformed;
     uint8_t optionsAutoHomepage;
+    uint8_t optionsSpooderClient;
+    uint8_t optionsSpooderServer;
 
   } setting;
 
@@ -268,6 +265,8 @@ private:
   uint8_t wifiStatus = WIFI_STATUS_BOOT;
   bool enableBlynk = false;
   bool enableWebServer = false;
+  bool enableSpooderClient = false;
+  bool enableSpooderServer = false;
   bool enableArduinoOTA = false;
   bool enableNetworkTime = true;
   void updateWifi();
@@ -276,23 +275,75 @@ private:
   void setMDNS(bool value);
   void setBlynk(bool value);
   void setWebServer(bool value);
+  void setSpooderClient(bool value);
+  void setSpooderServer(bool value);
   void setArduinoOTA(bool value);
   void setAutoHomepage(bool value);
   ArduinoOTAClass *ArduinoOTA; //use pointer to creat/delete object in code
   ESP8266WebServer *webServer; //use pointer to creat/delete object in code
   void installDynamicServiceQuery();
+  void removeDynamicServiceQuery();
+  void listSpooderService();
+  // Define how many clients we accpet simultaneously.
+  const uint8_t maxClients = 20;
+  const uint16_t websocketsPort = 8266; //Has to be different to webserver port
+  WebsocketsServer webSocketsServer;
+  // Vector to store all the clients
+  std::vector<WebsocketsClient> webSocketsClientsVector;
+  bool updateWebsockets = false;
+  void updateWebsocketsServer();
+  void listenForWebsocketsClients();
+  void pollWebsocketsClients();
+  int8_t getFreeClientIndex();
+  IPAddress spooderServerIP;
+  enum SPOODER_CLIENT_STATE
+  {
+    NONE,
+    SEARCHING_FOR_CONNECTION,
+    CONNECTED_TO_SERVER,
+    RECONNECTING_TO_SERVER,
+  } spooderClientState = NONE;
+  uint32_t delayedTimer;
+  uint32_t DELAYED_PERIOD;
+  uint8_t searchForServerTriesRemaining;
+  uint32_t searchingForConnectionTimer;
+  const uint32_t SEARCHING_FOR_CONNECTION_PERIOD = 2000;
+  struct SPOODER_SERVER
+  {
+    char hostname[12];
+    IPAddress ip;
+    uint16_t port;
+  };
+  bool isAnswerValidServer(uint8_t index);
+  //WiFiUDP Udp;
+  //uint16_t localUdpPort = 8266; // local port to listen on
+  //char udpPacketBuffer[UDP_PACKET_SIZE_LIMIT];
+  //bool updateUdp = false;
+  //void updateUdpPacket();
+
   bool netWorkTimeReceived = false;
   void updateNetworkTime();
   uint32_t updateNetworkTimeTimer;
   uint32_t UPDATE_NETWORK_TIME_PERIOD = 1000;
 
-  struct SPOODERS_DATASET_STRUCT
-  {
-    char hostname[10];
-    IPAddress ip;
-    int16_t fw; //filament weight in gram
-  } dataset[20];
+  //local communication between multiple devices
+  SPOODERS_DATASET_STRUCT dataset[MAX_NUM_OF_SPOODERS]; //index 0 used as self
+  uint8_t datasetLastPopulatedIndex = 0;
+  void updateDataset();              //update own dataset, and announce out
+  void copyDatasetFromServiceInfo(); //copy all info to dataset struct
+  uint32_t updateDatsetTimer;
+  const uint32_t UPDATE_DATASET_PERIOD = 5000; //1000 * 60 = 1 minute
+  void staticQueryMDNS();
+  void removeStaticQuery();
+  void listMDNSDynamicQueryAnswer();
+  MDNSResponder::hMDNSService spooderService = 0; // The handle of the spooder service in the MDNS responder
+  void updateServiceTxt();
+  void printSpoodersDataset();
+  void clearDataset(uint8_t index);
+  void sortDataset(); //Sort data based on spooderID
+  //bool complareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUCT b);
 
+  //display
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;
   bool setPage(uint8_t page); //return true if page changed, false in page not changed
@@ -430,19 +481,24 @@ private:
     DEBUG_RUN_LOG_TXT,
     DEBUG_STOP_LOG_TXT,
     DEBUG_TOGGLE_DETECTION_OUTPUT,
-    DEBUG_QUERY_MDNS,
+    DEBUG_STATIC_QUERY_MDNS,
+    DEBUG_REMOVE_STATIC_QUERY,
+    DEBUG_LIST_DYNAMIC_QUERY_ANSWER,
     DEBUG_UPDATE_SERVICE_TXT,
     DEBUG_PRINT_SPOODERS_DATASET,
-    DEBUG_CHECK_GITHUB_VERSION,
-    DEBUG_UPDATE_FROM_GITHUB,
+    DEBUG_CHECK_DATA_FOLDER,
+    DEBUG_UPDATE_DATA_FOLDER,
     DEBUG_PRINT_MEMORY,
-    DEBUG_SERVICES,
+    DEBUG_MANAGE_LOCAL_FILES,
+    DEBUG_RESERVED_1,
+    DEBUG_RESERVED_2,
+    DEBUG_LIST_SPOODER_SERVICE,
     DEBUG_RETURN
   };
   uint8_t debugMenuSelection = DEBUG_LOAD_TO_SETTING;
   uint8_t debugMenuItemStartIndex = 0;
   uint8_t debugMenuItemPerPage = 5;
-#define NUMBER_OF_DEBUG_ITEMS 23
+#define NUMBER_OF_DEBUG_ITEMS 28
   uint8_t numberOfDebugMenuItems = NUMBER_OF_DEBUG_ITEMS;
   String debugMenuTitle[NUMBER_OF_DEBUG_ITEMS] = {
       "Load to Setting",
@@ -460,13 +516,18 @@ private:
       "Start Emulation",
       "Stop Emulation",
       "Toogle Detection Output",
-      "Query mDNS",
+      "Static Query mDNS",
+      "Remove Static Query",
+      "List Dynamic Query Ans",
       "Update Service Txt",
       "Print Spooders Dataset",
-      "Check Github Version",
-      "Update From Github",
+      "Check /data folder",
+      "Update /data folder",
       "Print Memory",
-      "Services_Reserved",
+      "Manage Local Files",
+      "Reserved1",
+      "Reserved2",
+      "List Spooder Service",
       "<<-- Return to Menu "};
   enum OPTIONS_MENU
   {
@@ -474,23 +535,28 @@ private:
     OPTIONS_MENU_MDNS,
     OPTIONS_MENU_BLYNK,
     OPTIONS_MENU_WEB_SERVER,
+    OPTIONS_MENU_SPOODER_CLIENT,
+    OPTIONS_MENU_SPOODER_SERVER,
     OPTIONS_MENU_ARDUINO_OTA,
     OPTIONS_MENU_AUTO_HOMEPAGE,
     OPTIONS_MENU_RETURN
   };
-  String optionsMenuTitle[7] =
+#define NUM_OPTIONS_MENU_TITLE 9
+  String optionsMenuTitle[NUM_OPTIONS_MENU_TITLE] =
       {
           "WiFi",
           "mDNS",
           "Blynk",
           "Web server",
+          "Spooder Client",
+          "Spooder Server",
           "Arduino OTA",
           "Auto Homepage",
           "<<-- Return to Menu"};
   uint8_t optionsMenuSelection = OPTIONS_MENU_WIFI;
   uint8_t optionsMenuItemStartIndex = 0;
   uint8_t optionsMenuItemPerPage = 5;
-  uint8_t numberOfOptionsMenuItems = 7;
+  uint8_t numberOfOptionsMenuItems = NUM_OPTIONS_MENU_TITLE;
   bool getOptionsSetting(uint8_t selection);
   void setOptionsSetting(uint8_t selection, bool value);
 
@@ -668,17 +734,13 @@ private:
   bool getNotificationSetting(uint8_t selection);
   void setNotificationSetting(uint8_t selection, bool value);
 
-  void queryMDNS();
-  MDNSResponder::hMDNSService spooderService = 0; // The handle of the spooder service in the MDNS responder
-  void updateServiceTxt();
-  void printSpoodersDataset();
-  //void globalPrintMemory();
-
   //Github auto-update function related:
   //Imported from https://github.com/yknivag/ESP_OTA_GitHub
-  void checkGithubLatestRelease(bool forceCheck, bool doUpdate);
+  void checkGithubLatestRelease(bool forceCheck, bool doUpdate, bool getDataFolder, bool updateDataFolder);
+  bool checkGithubConnectionPrerequisite(); //return true if connection is ready
   BearSSL::CertStore *_certStore;
-
+  const bool DEBUG_PRINT_GITHUB_CONTENT = false;
+  const bool DEBUG_PRINT_GITHUB_RAM_USAGE = false;
   const char *user = "FuzzyNoodle";
   const char *repo = "Fuzzy-Spooder";
   const char *githubHost = "api.github.com";
@@ -699,6 +761,17 @@ private:
   bool convertTagToVersion(String t, VERSION_STRUCT *v); //convert String tag into VERSION_STRUCT, return false if invalid tag
   void printVersion(VERSION_STRUCT v);
   void saveGitgubFileToFs();
+  void listGitgubContent(BearSSL::WiFiClientSecure &client, String &path, bool updateDataFolder);
+  void manageLocalFileInfo(); // Create, manage the json file info of the local files. Used for comparison, if the local file needs to be updated.
+  const char *localFileInfoPath = "/fileinfo.json";
+  struct LOCAL_FILE_INFO_STRUCT
+  {
+    char name[32 + 1];
+    char path[32 + 1];
+    char sha[40 + 1];
+  };
+  void iterateLocalFiles(String dirname, DynamicJsonDocument &localFileDoc);
+
   //urlDetails_t _urlDetails(String url); // Separates a URL into protocol, host and path into a custom struct
   enum FIRMWARRE_UPDATE_MENU
   {
@@ -725,6 +798,8 @@ private:
   void updateAutoGithubCheck();
   uint32_t updateAutoGithubCheckTimer;
   const uint32_t UPDATE_AUTO_GITHUB_CHECK_PEROID = 1000;
+
+  void pause(); //for debugging, enter any key to continue
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H
