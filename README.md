@@ -146,12 +146,10 @@ After setting the OTA environment in the platformio.ini file, select the intende
 </details>
 ---
 
-### Using the Spooder
+## Using the Spooder
 
+### UI Pages
 
-
-
-There are three main pages:
 - **Spooder Home Page**:
   - Single click: Cycles the display mode:
     - Filament weight: an estimated weight (total - spool holder weight). Displays "Empty" when the value is below a negative value.
@@ -159,7 +157,7 @@ There are three main pages:
     - Total weight: measured (spool holder + filament) weight.
 - **Info Page**:
   - Displays additional information
-- **Menu Page**: Rotate and click the menu items. Currently available menu items are:
+- **Menu Page**: 
   - Tare: Perform a tare manually. The current tare offset value is saved into EEPROM. A manual tare needs to bo done at least once with the spool removed.
   - Calibrate: Perform a calibration. Calibrated value is saved into EEPROM. A calibration needs to be done at least once with known weight.
   - Spool Holder Weight: Set spool holder weight, or load preset values. This is used for the filament weight estimation.
@@ -167,6 +165,15 @@ There are three main pages:
   - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 80 g.
   - Notification: User option to enable or disable each notification type. 
   - Firmware Update: Update firmware from github repository directly.
+  - Options: User enable/disable the following options:
+    - WiFi
+    - mDNS
+    - Blynk
+    - Web server
+    - Spooder client
+    - Spooder server
+    - Arduino OTA
+    - Auto Homepage 
   - Debug: Various debugging functions.
 
 #### Spool Holder Weight
@@ -177,7 +184,7 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
-### Network Functions
+#### Network Functions
 To enable the network functions, user needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file manager works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
 
 #### Spooder ID and mDNS
@@ -213,8 +220,10 @@ If the **Auto Update** option is set to **On**, the device will check the latest
 After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
 Files can be uploaded, downloaded, or edited (for example, config.json) directly from the web browser.
+
 ---
 
+### Additional Information
 
 #### Bonjour Browser
 
