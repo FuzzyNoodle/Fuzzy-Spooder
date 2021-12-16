@@ -144,6 +144,7 @@ lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 
 After setting the OTA environment in the platformio.ini file, select the intended project environment on the bottom toolbar. Then, the upload command will conduct an OTA upload. If the mDNS hostname is not resolved, you can use the IP address.
 </details>
+
 ---
 
 ## Using the Spooder
