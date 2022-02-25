@@ -1,27 +1,27 @@
 /*!
  *  @file Filament_Estimator.h
  *
- *  
  *
- *  
+ *
+ *
  */
 
 #ifndef FILAMENT_ESTIMATOR_H
 #define FILAMENT_ESTIMATOR_H
 
-//Version for this firmware
-#define CURRENT_VERSION "1.0.2"
+// Version for this firmware
+#define CURRENT_VERSION "1.0.3"
 
 #include "Arduino.h"
 #include <stdio.h>
 #include <ESP8266WebServer.h>
 
-//Debug switches
+// Debug switches
 #define BLYNK_PRINT Serial // Defines the object that is used for printing
 //#define BLYNK_DEBUG        // Optional, this enables more detailed prints
 #define BLYNK_NO_FANCY_LOGO
 
-//Rotary library
+// Rotary library
 #include "ESPRotary.h"
 #include "Button2.h"
 #define ROTARY_PIN_CLK D3
@@ -30,35 +30,35 @@
 #define BUTTON_PIN D0
 #define LONG_CLICK_TIME 400
 
-//Include the SSD1306 display library for esp8266
+// Include the SSD1306 display library for esp8266
 #include "SSD1306Wire.h"
 #define SSD1306_SDA_PIN D2
 #define SSD1306_SCL_PIN D1
 #define SSD1306_ADDRESS 0x3c
 
-//Include the HX711 library
+// Include the HX711 library
 #include "HX711_ADC.h"
 #include <EEPROM.h>
 //#include <ESP_EEPROM.h>   //use this library to extend life
-#define HX711_DOUT_PIN D5 //mcu > HX711 dout pin
-#define HX711_SCK_PIN D6  //mcu > HX711 sck pin
+#define HX711_DOUT_PIN D5 // mcu > HX711 dout pin
+#define HX711_SCK_PIN D6  // mcu > HX711 sck pin
 
-//Network time function
+// Network time function
 #include <TZ.h>
 #define MYTZ TZ_Asia_Taipei
 //#define MYTZ TZ_America_Los_Angeles
 
-//File system
+// File system
 #include <ArduinoJson.h>
 #include "FS.h"
 #include <LittleFS.h>
 #include <WiFiClient.h>
 
-//ArduinoOTA
+// ArduinoOTA
 #define NO_GLOBAL_ARDUINOOTA
 #include <ArduinoOTA.h>
 
-//Blynk
+// Blynk
 #define JSON_DOC_BUFFER_SIZE 1024
 #define SPOOL_HOLDER_MAX_SLOT_SIZE 32
 
@@ -66,7 +66,7 @@
 #define ENABLE_SERIAL_DEBUG
 #endif
 
-//Detection
+// Detection
 #include <math.h>
 #define DETECTION_SAMPLE_SIZE 30
 
@@ -142,6 +142,8 @@
 
 #define PAGE_OPTIONS 90
 
+#define PAGE_ENTER_HOTSPOT_MODE 100
+
 #define DECLARED_EEPROM_SIZE 64
 #define EEPROM_START_ADDRESS 0
 
@@ -159,24 +161,25 @@
 #define SYMBOL_WIFI_NO_INTERNET_1 3
 #define SYMBOL_WIFI_NO_INTERNET_2 4
 
-//mDNS and communication between devices
+// mDNS and communication between devices
 #define MDNS_SERVICE_TXT_MAXLENGTH 100
 #include <ESP8266mDNS.h>
-#define MAX_NUM_OF_SPOODERS 64 //fix RAM is allocated
+#define MAX_NUM_OF_SPOODERS 64       // fix RAM is allocated
+#define MAX_NUM_OF_SPOODER_SERVERS 3 // in a local network. more than 20 causes OOM using dynamic mDNS
 #define DATASET_SPOODER_ID_SIZE 4
-//Has to be global due to sort callback
+// Has to be global due to sort callback
 struct SPOODERS_DATASET_STRUCT
 {
-  char spooderID[DATASET_SPOODER_ID_SIZE]; //A1, B12, ...
-  int16_t fw;                              //filament weight in gram //2 bytes
+  char spooderID[DATASET_SPOODER_ID_SIZE]; // A1, B12, ...
+  int16_t fw;                              // filament weight in gram //2 bytes
 };
 //#include <WiFiUdp.h>
 //#define UDP_PACKET_SIZE_LIMIT 32
 #include <ArduinoWebsockets.h>
 using namespace websockets;
 
-//Github auto update
-#define NO_GLOBAL_HTTPUPDATE //use local instance to free up RAM
+// Github auto update
+#define NO_GLOBAL_HTTPUPDATE // use local instance to free up RAM
 #include <ESP8266httpUpdate.h>
 #include <ESP8266HTTPClient.h>
 typedef struct urlDetails_t
@@ -187,6 +190,9 @@ typedef struct urlDetails_t
   String path;
 };
 
+// Hotspot mode for initial setup
+#include <DNSServer.h>
+
 class FILAMENT_ESTIMATOR
 {
 public:
@@ -195,48 +201,51 @@ public:
   void begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token);
   void update(void);
 
-  //Optional: enable wifi function
+  // Optional: enable wifi function
   void setWifi(bool value);
 
   void buttonHandler(Button2 &btn);
   void rotaryHandler(ESPRotary &rty);
 
-  //made public due to using callback function in class, requires an outside-class function
-  void handleStatus();     //Return the FS type, status and size info
-  void handleFileList();   //Return the list of files in the directory specified by the "dir" query string parameter. Also demonstrates the use of chuncked responses.
-  void handleGetEdit();    //This specific handler returns the index.htm from the /edit folder.
-  void handleFileCreate(); //Handle the creation/rename of a new file
-  void handleFileDelete(); //Handle a file deletion request
-  void handleFileUpload(); //Handle a file upload request
-  void handleNotFound();   //The "Not Found" handler
+  // made public due to using callback function in class, requires an outside-class function
+  void handleStatus();     // Return the FS type, status and size info
+  void handleFileList();   // Return the list of files in the directory specified by the "dir" query string parameter. Also demonstrates the use of chuncked responses.
+  void handleGetEdit();    // This specific handler returns the index.htm from the /edit folder.
+  void handleFileCreate(); // Handle the creation/rename of a new file
+  void handleFileDelete(); // Handle a file deletion request
+  void handleFileUpload(); // Handle a file upload request
+  void handleNotFound();   // The "Not Found" handler
   void replyOK();
+  void handleSetupSave(); // Handle the setup save button action
 
   void MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo *serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent);
+  void handleWebsocketsMessage(WebsocketsClient &client, WebsocketsMessage message);
+  void handleWebsocketsEvent(WebsocketsClient &client, WebsocketsEvent event, String data);
 
 private:
-  //ESP8266WebServer server;
+  // ESP8266WebServer server;
   Button2 button;
   ESPRotary rotary;
   SSD1306Wire display;
 
   struct VERSION_STRUCT
   {
-    uint8_t major; //incompatible API changes
-    uint8_t minor; //add functionality in a backwards compatible manner
-    uint8_t patch; //make backwards compatible bug fixes
+    uint8_t major; // incompatible API changes
+    uint8_t minor; // add functionality in a backwards compatible manner
+    uint8_t patch; // make backwards compatible bug fixes
   };
   VERSION_STRUCT currentVersion;
   VERSION_STRUCT githubLatestReleaseVersion;
 
-  //struct used to interact with eeprom, without the hasstle of address and lengths
+  // struct used to interact with eeprom, without the hasstle of address and lengths
   struct EEPROM_SETTING_STRUCT
   {
     VERSION_STRUCT version;
     float calValue;
     uint16_t spoolHolderWeight;
     byte spooderIDSetStatus;
-    uint8_t spooderIDLetter; //1=A, 2=B, ... 26=Z
-    uint8_t spooderIDNumber; //1 - 99
+    uint8_t spooderIDLetter; // 1=A, 2=B, ... 26=Z
+    uint8_t spooderIDNumber; // 1 - 99
     uint16_t lowFilamentThreshold;
     uint8_t notifyOnPrintStarted;
     uint8_t notifyOnPrintCompleted;
@@ -250,7 +259,7 @@ private:
     uint8_t optionsWebServer;
     uint8_t optionsArduinoOTA;
     uint8_t autoGithubUpdate;
-    long tareOffset; //using 32 bytes here
+    long tareOffset; // using 32 bytes here
     uint16_t calibrationWeight;
     uint8_t calibrationWeightIsValid;
     uint8_t automaticUpdateJustPerformed;
@@ -260,7 +269,7 @@ private:
 
   } setting;
 
-  //Network related
+  // Network related
   bool enableWifi = false;
   uint8_t wifiStatus = WIFI_STATUS_BOOT;
   bool enableBlynk = false;
@@ -279,60 +288,71 @@ private:
   void setSpooderServer(bool value);
   void setArduinoOTA(bool value);
   void setAutoHomepage(bool value);
-  ArduinoOTAClass *ArduinoOTA; //use pointer to creat/delete object in code
-  ESP8266WebServer *webServer; //use pointer to creat/delete object in code
+  ArduinoOTAClass *ArduinoOTA; // use pointer to creat/delete object in code
+  ESP8266WebServer *webServer; // use pointer to creat/delete object in code
   void installDynamicServiceQuery();
   void removeDynamicServiceQuery();
   void listSpooderService();
   // Define how many clients we accpet simultaneously.
   const uint8_t maxClients = 20;
-  const uint16_t websocketsPort = 8266; //Has to be different to webserver port
-  WebsocketsServer webSocketsServer;
-  // Vector to store all the clients
-  std::vector<WebsocketsClient> webSocketsClientsVector;
-  bool updateWebsockets = false;
-  void updateWebsocketsServer();
-  void listenForWebsocketsClients();
-  void pollWebsocketsClients();
-  int8_t getFreeClientIndex();
-  IPAddress spooderServerIP;
-  enum SPOODER_CLIENT_STATE
+  const uint16_t websocketsPort = 8266;                  // Has to be different to webserver port
+  WebsocketsServer webSocketsServer;                     // used in spooder server
+  WebsocketsClient webSocketsClient;                     // used in spooder client
+  std::vector<WebsocketsClient> webSocketsClientsVector; // Vector to store all the client connections in spooder server
+
+  struct WEBSOCKETS_PACKET
   {
-    NONE,
-    SEARCHING_FOR_CONNECTION,
-    CONNECTED_TO_SERVER,
-    RECONNECTING_TO_SERVER,
-  } spooderClientState = NONE;
-  uint32_t delayedTimer;
-  uint32_t DELAYED_PERIOD;
-  uint8_t searchForServerTriesRemaining;
-  uint32_t searchingForConnectionTimer;
-  const uint32_t SEARCHING_FOR_CONNECTION_PERIOD = 2000;
-  struct SPOODER_SERVER
-  {
-    char hostname[12];
-    IPAddress ip;
-    uint16_t port;
+    uint8_t num;
+    char str[10];
+    float weight;
   };
+
+  union WEBSOCKETS_HOLDER
+  {
+    WEBSOCKETS_PACKET p;
+    char str[10];
+  };
+
+  struct WEBSOCKETS_PACKET *packetAddress;
+
+  void updateWebsocketsServer();
+  void updateWebsocketsClient();
+  void spooderServerListenForWebsocketsClients();
+  void spooderServerPollWebsocketsClients();
+  int8_t getFreeClientIndex();
   bool isAnswerValidServer(uint8_t index);
-  //WiFiUDP Udp;
-  //uint16_t localUdpPort = 8266; // local port to listen on
-  //char udpPacketBuffer[UDP_PACKET_SIZE_LIMIT];
-  //bool updateUdp = false;
-  //void updateUdpPacket();
+  void connectSpooderServer(uint8_t index);
+  enum SERVER_VALID_STATUS
+  {
+    INVALID,
+    VALID,
+  };
+  SERVER_VALID_STATUS serverValidStatus[MAX_NUM_OF_SPOODER_SERVERS] = {};
+  enum SERVER_CONNECTION_STATUS
+  {
+    NOT_CONNECTED,
+    CONNECTED,
+  };
+  SERVER_CONNECTION_STATUS serverConnectionStatus[MAX_NUM_OF_SPOODER_SERVERS] = {};
+  uint32_t updateSpooderClientTimer;
+  const uint32_t UPDATE_SPOODER_CLIENT_PEROID = 3000;
+  void updateSpooderClient();
+  uint32_t updateSpooderServerStatusTimer;
+  const uint32_t UPDATE_SPOODER_SERVER_STATUS_PEROID = 3000;
+  void updateSpooderServer();
 
   bool netWorkTimeReceived = false;
   void updateNetworkTime();
   uint32_t updateNetworkTimeTimer;
   uint32_t UPDATE_NETWORK_TIME_PERIOD = 1000;
 
-  //local communication between multiple devices
-  SPOODERS_DATASET_STRUCT dataset[MAX_NUM_OF_SPOODERS]; //index 0 used as self
+  // local communication between multiple devices
+  SPOODERS_DATASET_STRUCT dataset[MAX_NUM_OF_SPOODERS]; // index 0 used as self
   uint8_t datasetLastPopulatedIndex = 0;
-  void updateDataset();              //update own dataset, and announce out
-  void copyDatasetFromServiceInfo(); //copy all info to dataset struct
+  void updateDataset();              // update own dataset, and announce out
+  void copyDatasetFromServiceInfo(); // copy all info to dataset struct
   uint32_t updateDatsetTimer;
-  const uint32_t UPDATE_DATASET_PERIOD = 5000; //1000 * 60 = 1 minute
+  const uint32_t UPDATE_DATASET_PERIOD = 5000; // 1000 * 60 = 1 minute
   void staticQueryMDNS();
   void removeStaticQuery();
   void listMDNSDynamicQueryAnswer();
@@ -340,13 +360,14 @@ private:
   void updateServiceTxt();
   void printSpoodersDataset();
   void clearDataset(uint8_t index);
-  void sortDataset(); //Sort data based on spooderID
-  //bool complareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUCT b);
+  void sortDataset(); // Sort data based on spooderID
+  // bool complareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUCT b);
+  uint8_t secondsNow(); // get current seconds, used for sequencing
 
-  //display
+  // display
   uint8_t currentPage = PAGE_NONE;
   uint8_t previousPage = PAGE_NONE;
-  bool setPage(uint8_t page); //return true if page changed, false in page not changed
+  bool setPage(uint8_t page); // return true if page changed, false in page not changed
   void displayPage(uint8_t page);
   void drawBottomIndicator(uint8_t index);
   void drawRightIndicator(uint8_t index);
@@ -354,7 +375,7 @@ private:
   void drawLeftIndicator(uint8_t index);
   uint8_t menuItemStartIndex = 0;
   const uint8_t menuItemPerPage = 5;
-  const uint8_t numberOfMenuItems = 9;
+  const uint8_t numberOfMenuItems = 10;
   enum MENU
   {
     MENU_TARE,
@@ -363,58 +384,60 @@ private:
     MENU_SET_SPOODER_ID,
     MENU_LOW_FILAMENT_SETUP,
     MENU_NOTIFICATION,
+    MENU_ENTER_HOTSPOT_MODE,
     MENU_FIRMWARE_UPDATE,
     MENU_OPTIONS,
     MENU_DEBUG
   };
-  String menuTitle[9] = {"Tare",
-                         "Calibrate",
-                         "Spool Holder Weight",
-                         "Set Spooder ID",
-                         "Low Filament Setup",
-                         "Notification",
-                         "Firmware Update",
-                         "Options",
-                         "Debug"};
+  String menuTitle[10] = {"Tare",
+                          "Calibrate",
+                          "Spool Holder Weight",
+                          "Set Spooder ID",
+                          "Low Filament Setup",
+                          "Notification",
+                          "Hotspot Setup",
+                          "Firmware Update",
+                          "Options",
+                          "Debug"};
   uint8_t tareSelection = TARE_OK;
   void drawTriangle(uint8_t x, uint8_t y);
   void tare();
   void calibrate();
   uint32_t returnToHomepageTimer;
-  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 30000; //30 seconds
+  uint32_t RETURN_TO_HOMEPAGE_PERIOD = 30000; // 30 seconds
   void checkCurrentPage();
 
-  //Set the default total weight in grams for calibration after power on
-  //Valid values from 0 to 9999
+  // Set the default total weight in grams for calibration after power on
+  // Valid values from 0 to 9999
   void setCalibrationWeight(uint16_t weight);
 
-  //Set the default weight in grams for the spool holder. Can be changed in the UI.
-  //Valid values from 0 to 999
-  //Value is also saved to EEPROM
+  // Set the default weight in grams for the spool holder. Can be changed in the UI.
+  // Valid values from 0 to 999
+  // Value is also saved to EEPROM
   void setCurrentSpoolHolderWeight(uint16_t weight);
 
-  //Set the steps per click of the rotary encoder
+  // Set the steps per click of the rotary encoder
   void setStepsPerClick(uint8_t steps);
 
-  //Get the steps per click of the rotary encoder
+  // Get the steps per click of the rotary encoder
   uint8_t getStepsPerClick();
 
-  //Time settings for button
+  // Time settings for button
   void setDebounceTime(uint16_t ms);
-  //Time settings for button
+  // Time settings for button
   void setLongClickTime(uint16_t ms);
-  //Time settings for button
+  // Time settings for button
   void setDoubleClickTime(uint16_t ms);
-  //Time settings for button
+  // Time settings for button
   uint16_t getDebounceTime();
-  //Time settings for button
+  // Time settings for button
   uint16_t getLongClickTime();
-  //Time settings for button
+  // Time settings for button
   uint16_t getDoubleClickTime();
   uint8_t stepsPerClick = DEFAULT_STEPS_PER_CLICK;
 
   HX711_ADC loadcell;
-  //float calibrateValue; //a default value required for next calibration
+  // float calibrateValue; //a default value required for next calibration
   float newCalibrationValue;
   // preciscion right after power-up can be improved by adding a few seconds of stabilizing time
   uint32_t stabilizingTime = 2000;
@@ -422,10 +445,10 @@ private:
   float totalWeight;
   float previousTotalWeight;
   uint32_t updateHomepageTimer;
-  //The period to refresh homepage (weight)
+  // The period to refresh homepage (weight)
   const uint32_t UPDATE_HOMEPAGE_PERIOD = 200;
   void updateHomepage();
-  //Display overlay msg for [period ms]. If line2="", line1 is displayed at center.
+  // Display overlay msg for [period ms]. If line2="", line1 is displayed at center.
   void drawOverlay(const char *msgLine1, const char *msgLine2, uint16_t period);
   void updateOverlay();
   const char *overlayMsgLine1;
@@ -444,8 +467,8 @@ private:
   uint8_t calibrate3Digit = 0;
   uint8_t calibrate2Digit = 0;
   uint8_t calibrate1Digit = 0;
-  uint16_t getCalibrationWeight(); //get the weight from 4-digit UI menu
-  //uint16_t calibrationWeight = 0;
+  uint16_t getCalibrationWeight(); // get the weight from 4-digit UI menu
+  // uint16_t calibrationWeight = 0;
   void checkCalibrateEditModeTimer();
   bool displayCalibrateDigit = true;
   uint32_t calibrateEditModerTimer;
@@ -490,8 +513,8 @@ private:
     DEBUG_UPDATE_DATA_FOLDER,
     DEBUG_PRINT_MEMORY,
     DEBUG_MANAGE_LOCAL_FILES,
-    DEBUG_RESERVED_1,
-    DEBUG_RESERVED_2,
+    DEBUG_TOOGLE_VERBOSE_DEBUG,
+    DEBUG_CONNECT_SPOODER_SERVER,
     DEBUG_LIST_SPOODER_SERVICE,
     DEBUG_RETURN
   };
@@ -525,8 +548,8 @@ private:
       "Update /data folder",
       "Print Memory",
       "Manage Local Files",
-      "Reserved1",
-      "Reserved2",
+      "Toogle Verbose Debug",
+      "Connect Spooder Server",
       "List Spooder Service",
       "<<-- Return to Menu "};
   enum OPTIONS_MENU
@@ -559,15 +582,16 @@ private:
   uint8_t numberOfOptionsMenuItems = NUM_OPTIONS_MENU_TITLE;
   bool getOptionsSetting(uint8_t selection);
   void setOptionsSetting(uint8_t selection, bool value);
-
   void loadToSetting();
   void saveToEEPROM();
   void dumpSetting();
   void dumpEEPROM();
   void eraseEEPROM();
   uint32_t versionToNumber(VERSION_STRUCT v);
-
-  void listDir(const char *dirname); //List the FSn directory in a user-friendly text format
+  void toogleVerboseDebug();
+  bool VERBOSE_DEBUG_PRINT = true;
+  bool VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER = false;
+  void listDir(const char *dirname); // List the FSn directory in a user-friendly text format
   void _listDir(const char *dirname, uint8_t level);
 
   void displayMonoBitmap(const char *filename);
@@ -583,23 +607,23 @@ private:
   uint8_t spoolHolder1Digit = 0;
   const uint32_t SPOOL_HOLDER_EDIT_MODE_PERIOD = 500;
   void checkSpoolHolderEditModeTimer();
-  uint16_t getSpoolHolderWeight(); //get the weight from 3-digit UI menu
+  uint16_t getSpoolHolderWeight(); // get the weight from 3-digit UI menu
   bool noSpoolHolderWeightInEEPROM = false;
 
   // Allocate a buffer to store contents of the file.
-  //char configBuffer[CONFIG_FILE_BUFFER_SIZE];
+  // char configBuffer[CONFIG_FILE_BUFFER_SIZE];
   uint16_t configSize;
-  void loadConfig(); //load the config file into buffer
-  void dumpConfig(); //Pring all the config.json content for debugging purpose
-
-  //StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDocS;
+  void loadConfig(); // load the config file into buffer
+  void dumpConfig(); // Pring all the config.json content for debugging purpose
+  void saveConfig(); // update ssid, password and blynk auth token
+  // StaticJsonDocument<JSON_DOC_BUFFER_SIZE> jsonDocS;
 
   char config_version[16]; // "0.3.0"
   char wifi_ssid[32];      // "your_ssid", max 32 bytes
   char wifi_password[63];  // "your_password", max 63 bytes
   char blynk_auth[33];     // 32-bytes blynk authorization code, +1 byte for null terminator
 
-  //const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
+  // const char *spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE];
   char spoolHolderSlotName[SPOOL_HOLDER_MAX_SLOT_SIZE][12];
 
   uint16_t spoolHolderSlotWeight[SPOOL_HOLDER_MAX_SLOT_SIZE];
@@ -617,7 +641,7 @@ private:
   const uint32_t SET_SPOODER_ID_EDIT_MODE_PERIOD = 500;
   String hostname = "";
 
-  void drawSymbols(); //Draw WiFi and Blynk symbols
+  void drawSymbols(); // Draw WiFi and Blynk symbols
   uint8_t connectionStatus = CONNECTION_STATUS_NONE;
   uint8_t symbolType = SYMBOL_NONE;
   uint32_t displayConnectionStatusTimer;
@@ -629,7 +653,7 @@ private:
   uint32_t checkConnectionDisplaySymbolTimer;
   void checkConnectionDisplaySymbol();
 
-  //file system manager, imported from https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser
+  // file system manager, imported from https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser
   const char *fsName = "LittleFS";
   FS *fileSystem = &LittleFS;
   LittleFSConfig fileSystemConfig = LittleFSConfig();
@@ -645,9 +669,9 @@ private:
   void replyBadRequest(String msg);
   void replyServerError(String msg);
   // Request handlers
-  bool handleFileRead(String path);       //Read the given file from the filesystem and stream it back to the client
-  String lastExistingParent(String path); //As some FS (e.g. LittleFS) delete the parent folder when the last child has been removed, return the path of the closest parent still existing
-  void deleteRecursive(String path);      //Delete the file or folder designed by the given path. If it's a file, delete it. If it's a folder, delete all nested contents first then the folder itself
+  bool handleFileRead(String path);       // Read the given file from the filesystem and stream it back to the client
+  String lastExistingParent(String path); // As some FS (e.g. LittleFS) delete the parent folder when the last child has been removed, return the path of the closest parent still existing
+  void deleteRecursive(String path);      // Delete the file or folder designed by the given path. If it's a file, delete it. If it's a folder, delete all nested contents first then the folder itself
 
   // Data logging
   // 10 min = 18 kB
@@ -664,18 +688,18 @@ private:
   time_t now;
   time_t previous;
 
-  //Logged data emulation
-  void startEmulation();  //emulate the logged data, using log/log.txt
-  void stopEmulation();   //stop the emulation
-  void updateEmulation(); //update emulated weight
+  // Logged data emulation
+  void startEmulation();  // emulate the logged data, using log/log.txt
+  void stopEmulation();   // stop the emulation
+  void updateEmulation(); // update emulated weight
   bool emulationStarted = false;
   uint32_t emulationTimer;
   uint32_t EMULATION_PERIOD = 1000;
   float emulatedWeight;
   File emulatedLogFile;
 
-  //Status detection using average and std dev
-  //function imported from https://github.com/MajenkoLibraries/Average
+  // Status detection using average and std dev
+  // function imported from https://github.com/MajenkoLibraries/Average
   uint32_t DETECTION_PERIOD = 1000;
   uint32_t detectionTimer;
   void updateDetection();
@@ -683,8 +707,8 @@ private:
   uint16_t stddevCount = 0;
   uint16_t detectionPosition = 0;
   uint16_t stddevPosition = 0;
-  float weightArray[DETECTION_SAMPLE_SIZE]; //array to store weight
-  float stddevArray[DETECTION_SAMPLE_SIZE]; //array to store stddev3
+  float weightArray[DETECTION_SAMPLE_SIZE]; // array to store weight
+  float stddevArray[DETECTION_SAMPLE_SIZE]; // array to store stddev3
   void pushWeight(float entry);
   void pushStddev(float entry);
   void purgeWeight(float value);
@@ -701,11 +725,11 @@ private:
   String printingStatusString;
   bool detectionDebugOutput = false;
   float getSum(uint16_t samples);
-  float getMean(uint16_t samples);         //retern mean of the latest number of samples
-  float getStddev(uint16_t samples);       //retern stddev of the latest number of samples
-  uint8_t getStddevCount(float threshold); //return number of samples that are greater than threshold
+  float getMean(uint16_t samples);         // retern mean of the latest number of samples
+  float getStddev(uint16_t samples);       // retern stddev of the latest number of samples
+  uint8_t getStddevCount(float threshold); // return number of samples that are greater than threshold
 
-  //Notification functions
+  // Notification functions
   enum NOTIFICATION_MESSAGE
   {
     NOTIFICATION_TEST_MESSAGE,
@@ -734,19 +758,18 @@ private:
   bool getNotificationSetting(uint8_t selection);
   void setNotificationSetting(uint8_t selection, bool value);
 
-  //Github auto-update function related:
-  //Imported from https://github.com/yknivag/ESP_OTA_GitHub
+  // Github auto-update function related:
+  // Imported from https://github.com/yknivag/ESP_OTA_GitHub
   void checkGithubLatestRelease(bool forceCheck, bool doUpdate, bool getDataFolder, bool updateDataFolder);
-  bool checkGithubConnectionPrerequisite(); //return true if connection is ready
+  bool checkGithubConnectionPrerequisite(); // return true if connection is ready
   BearSSL::CertStore *_certStore;
-  const bool DEBUG_PRINT_GITHUB_CONTENT = false;
-  const bool DEBUG_PRINT_GITHUB_RAM_USAGE = false;
+
   const char *user = "FuzzyNoodle";
   const char *repo = "Fuzzy-Spooder";
   const char *githubHost = "api.github.com";
   int githubPort = 443;
   const char *_currentTag = CURRENT_VERSION;
-  //Need to reserve global String to prevent unwanted memory usage
+  // Need to reserve global String to prevent unwanted memory usage
   const int githubVersionSize = 12;
   String githubVersion = "- - - - -";
   const int _updateURLSize = 768;
@@ -754,11 +777,11 @@ private:
   const char *_binFile = "firmware.bin";
 #define GHOTA_CONTENT_TYPE "application/octet-stream"
   bool _preRelease = true;
-  int numCerts = 0; //number or certs read from file system
+  int numCerts = 0; // number or certs read from file system
   bool githubVersionObtained = false;
   bool githubUpdateAvailable = false;
   bool versionTagIsValid(VERSION_STRUCT v);
-  bool convertTagToVersion(String t, VERSION_STRUCT *v); //convert String tag into VERSION_STRUCT, return false if invalid tag
+  bool convertTagToVersion(String t, VERSION_STRUCT *v); // convert String tag into VERSION_STRUCT, return false if invalid tag
   void printVersion(VERSION_STRUCT v);
   void saveGitgubFileToFs();
   void listGitgubContent(BearSSL::WiFiClientSecure &client, String &path, bool updateDataFolder);
@@ -772,7 +795,7 @@ private:
   };
   void iterateLocalFiles(String dirname, DynamicJsonDocument &localFileDoc);
 
-  //urlDetails_t _urlDetails(String url); // Separates a URL into protocol, host and path into a custom struct
+  // urlDetails_t _urlDetails(String url); // Separates a URL into protocol, host and path into a custom struct
   enum FIRMWARRE_UPDATE_MENU
   {
     FIRMWARE_UPDATE_MENU_CHECK_NOW,
@@ -793,13 +816,34 @@ private:
   uint8_t updateMenuItemStartIndex = 0;
   uint8_t updateMenuItemPerPage = 3;
   uint8_t numberOfUpdateMenuItems = 5;
-  uint32_t nextCheckTimeMillis = 0; //random countdown between 60~120 minutes
+  uint32_t nextCheckTimeMillis = 0; // random countdown between 60~120 minutes
   void setNextCheckCountdown();
   void updateAutoGithubCheck();
   uint32_t updateAutoGithubCheckTimer;
   const uint32_t UPDATE_AUTO_GITHUB_CHECK_PEROID = 1000;
 
-  void pause(); //for debugging, enter any key to continue
+  void pause(); // for debugging, enter any key to continue
+
+  // Hotspot mode for initial setup
+  void enterHotspotMode(); // to setup spooder using ap mode and browser
+  void exitHotspotMode();
+  bool isHotspotMode = false;
+  const byte DNS_PORT = 53;
+  DNSServer dnsServer;
+  // String captivePortalResponseHTML = "<!DOCTYPE html><html lang='en'> <head> <meta charset='utf-8' /> <meta name='viewport' content='width=device-width, initial-scale=1' /> <title>Spooder Setup</title> <style> *, ::after, ::before { box-sizing: border-box; } body { margin: 0; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans'; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #f5f5f5; } .form-control { display: block; width: 100%; height: calc(1.5em + 0.75rem + 2px); border: 1px solid #ced4da; } button { cursor: pointer; border: 1px solid transparent; color: #fff; background-color: #007bff; border-color: #007bff; padding: 0.5rem 1rem; font-size: 1.25rem; line-height: 1.5; border-radius: 0.3rem; width: 100%; } .form-signin { width: 100%; max-width: 400px; padding: 15px; margin: auto; } h1 { text-align: center; } </style> </head> <body> <main class='form-signin'> <form action='/' method='post'> <h1 class=''>Spooder Setup</h1> <br /> <div class='form-floating'> <label>WiFi SSID</label> <input type='text' class='form-control' name='ssid' /> </div> <div class='form-floating'> <br /> <label>WiFi Password</label> <input type='password' class='form-control' name='password' /> </div> <div class='form-floating'> <br /> <label>Blynk Auth Token</label> <input type='text' class='form-control' name='blynk_auth_token' /> </div> <br /> <br /> <button type='submit'>Save</button> <p style='text-align: right;'></p> </form> </main> </body></html>";
+  // Debug print memory: Heap: 21128    Block: 17384
+  // String captivePortalResponseHTML = "";
+  // Debug print memory: Heap: 24272    Block: 20256
+  enum SETUP_SAVE_REPLY_MESSAGE
+  {
+    SETUP_SAVED,
+    SETUP_CLEARED,
+    SETUP_TOO_LONG,
+    SETUP_INCORRECT_LENGTH,
+    SETUP_NO_CHANGE,
+  };
+  bool resetWiFi = false;
+  bool resetBlynk = false;
 };
 
 #endif //#ifndef FILAMENT_ESTIMATOR_H

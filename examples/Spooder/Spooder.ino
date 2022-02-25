@@ -13,6 +13,7 @@ void setup()
 {
   //Optional: Enable the Serial for debug outout.
   Serial.begin(115200);
+  //Serial.println("Spooder started.");
   
   //Required: Initialize the spooder.
   spooder.begin();
