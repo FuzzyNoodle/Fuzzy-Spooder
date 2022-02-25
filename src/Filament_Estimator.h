@@ -10,7 +10,7 @@
 #define FILAMENT_ESTIMATOR_H
 
 // Version for this firmware
-#define CURRENT_VERSION "1.0.3"
+#define CURRENT_VERSION "1.1.0"
 
 #include "Arduino.h"
 #include <stdio.h>
