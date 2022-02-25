@@ -4,7 +4,7 @@
 
 extern BlynkWifi Blynk;
 
-FILAMENT_ESTIMATOR *estimatorPointer;         //Declare a pointer to WEIGHT_ESTIMATOR
+FILAMENT_ESTIMATOR *estimatorPointer;         // Declare a pointer to WEIGHT_ESTIMATOR
 static void globalButtonHandler(Button2 &btn) // define global handler
 {
     estimatorPointer->buttonHandler(btn); // calls class member handler
@@ -47,63 +47,29 @@ static void globalReplyOK()
 }
 static void globalHandleWebsocketsMessage(WebsocketsClient &client, WebsocketsMessage message)
 {
-    auto data = message.data();
-
-    // Log message
-    Serial.print("Got Message: ");
-    Serial.println(data);
-
-    // Echo message
-    client.send("Echo: " + data);
+    estimatorPointer->handleWebsocketsMessage(client, message);
 }
 static void globalHandleWebsocketsEvent(WebsocketsClient &client, WebsocketsEvent event, String data)
 {
-    switch (event)
-    {
-    case WebsocketsEvent::ConnectionOpened:
-        Serial.println("Connection opened");
-
-        break;
-    case WebsocketsEvent::ConnectionClosed:
-        Serial.print("Connection closed:");
-        Serial.println(client.getCloseReason());
-        /*
-        CloseReason_None                =       -1,
-        CloseReason_NormalClosure       =       1000,
-        CloseReason_GoingAway           =       1001,
-        CloseReason_ProtocolError       =       1002,
-        CloseReason_UnsupportedData     =       1003,
-        CloseReason_NoStatusRcvd        =       1005,
-        CloseReason_AbnormalClosure     =       1006,
-        CloseReason_InvalidPayloadData  =       1007,
-        CloseReason_PolicyViolation     =       1008,
-        CloseReason_MessageTooBig       =       1009,
-        CloseReason_InternalServerError =       1011,
-        */
-        break;
-    case WebsocketsEvent::GotPing:
-        Serial.println("Got ping.");
-        break;
-    case WebsocketsEvent::GotPong:
-        Serial.println("Got pong");
-        break;
-    default:
-        break;
-    }
+    estimatorPointer->handleWebsocketsEvent(client, event, data);
+}
+static void globalHandleSetupSave()
+{
+    estimatorPointer->handleSetupSave();
 }
 
 MDNSResponder::hMDNSServiceQuery hMDNSServiceQuery = 0; // The global handle of the 'http.tcp' service query in the MDNS responder
 void globalMDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
-    //pass information the the inside-class method
+    // pass information the the inside-class method
     estimatorPointer->MDNSServiceQueryCallback(&serviceInfo, answerType, p_bSetContent);
 }
 bool globalComplareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUCT b)
 {
-    //padding
+    // padding
     if (strlen(a.spooderID) == 2)
     {
-        //need to pad A1 to A01, so that A2 (A02) will be smaller than A11
+        // need to pad A1 to A01, so that A2 (A02) will be smaller than A11
         SPOODERS_DATASET_STRUCT temp;
         strncpy(temp.spooderID, a.spooderID, 1);
         strcpy(temp.spooderID + 1, "0");
@@ -119,10 +85,10 @@ bool globalComplareTwoSpooders(SPOODERS_DATASET_STRUCT a, SPOODERS_DATASET_STRUC
         strcpy(b.spooderID, temp.spooderID);
     }
 
-    //This function starts comparing the first character of each string.
-    //If they are equal to each other, it continues with the following
-    //pairs until the characters differ or until a terminating
-    //null-character is reached.
+    // This function starts comparing the first character of each string.
+    // If they are equal to each other, it continues with the following
+    // pairs until the characters differ or until a terminating
+    // null-character is reached.
     if (strcmp(a.spooderID, b.spooderID) < 0)
     {
         return true;
@@ -141,6 +107,35 @@ void globalPrintMemory(String s)
     Serial.println(ESP.getMaxFreeBlockSize());
 }
 
+// Hotspot mode for initial setup
+// Using PROGMEM to save RAM
+// tools used:
+// HTML online editor https://www.w3schools.com/html/tryit.asp?filename=tryhtml_basic
+// HTML formatter https://webformatter.com/html
+// HTML compresser https://www.textfixer.com/html/compress-html-compression.php
+
+// static const char captivePortalResponseHTML[] PROGMEM = "<!DOCTYPE html><html lang='en'> <head> <meta charset='utf-8' /> <meta name='viewport' content='width=device-width, initial-scale=1' /> <title>Spooder Setup</title> <style> *, ::after, ::before { box-sizing: border-box; } body { margin: 0; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans'; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #f5f5f5; } .form-control { display: block; width: 100%; height: calc(1.5em + 0.75rem + 2px); border: 1px solid #ced4da; } button { cursor: pointer; border: 1px solid transparent; color: #fff; background-color: #007bff; border-color: #007bff; padding: 0.5rem 1rem; font-size: 1.25rem; line-height: 1.5; border-radius: 0.3rem; width: 100%; } .form-signin { width: 100%; max-width: 400px; padding: 15px; margin: auto; } h1 { text-align: center; } </style> </head> <body> <main class='form-signin'> <form action='/' method='post'> <h1 class=''>Spooder Setup</h1> <br /> <div class='form-floating'> <label>WiFi SSID</label> <input type='text' class='form-control' name='ssid' value='gnet02' /> </div> <div class='form-floating'> <br /> <label>WiFi Password</label> <input type='password' class='form-control' name='password' /> </div> <div class='form-floating'> <br /> <label>Blynk Auth Token</label> <input type='text' class='form-control' name='blynk_auth_token' /> </div> <br /> <br /> <button type='submit'>Save</button> <p style='text-align: right;'></p> </form> </main> </body></html> ";
+
+static const char captivePortalResponseHTML1[] PROGMEM = "<!DOCTYPE html><html lang='en'> <head> <meta charset='utf-8' /> <meta name='viewport' content='width=device-width, initial-scale=1' /> <title>Spooder Setup</title> <style> *, ::after, ::before { box-sizing: border-box; } body { margin: 0; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans'; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #f5f5f5; } .form-control { display: block; width: 100%; height: calc(1.5em + 0.75rem + 2px); border: 1px solid #ced4da; } button { cursor: pointer; border: 1px solid transparent; color: #fff; background-color: #007bff; border-color: #007bff; padding: 0.5rem 1rem; font-size: 1.25rem; line-height: 1.5; border-radius: 0.3rem; width: 100%; } .form-signin { width: 100%; max-width: 400px; padding: 15px; margin: auto; } h1 { text-align: center; } </style> </head> <body> <main class='form-signin'> <form action='/' method='post'> <h1 class=''>Spooder Setup</h1> <br /> <div class='form-floating'> <label>WiFi SSID</label> ";
+// ssid reply message here
+static const char captivePortalResponseHTML2[] PROGMEM = "<input type='text' class='form-control' name='ssid' value='";
+// ssid here
+static const char captivePortalResponseHTML3[] PROGMEM = "'/> </div> <div class='form-floating'> <br /> <label>WiFi Password</label> ";
+// password reply message here
+static const char captivePortalResponseHTML4[] PROGMEM = "<input type='text' class='form-control' name='password' value ='";
+// password here
+static const char captivePortalResponseHTML5[] PROGMEM = "'/> </div> <div class='form-floating'> <br /> <label>Blynk Auth Token</label>";
+// blynk auth token reply message here
+static const char captivePortalResponseHTML6[] PROGMEM = "<input type='text' class='form-control' name='blynk_auth_token' value ='";
+// blynk auth token here
+static const char captivePortalResponseHTML7[] PROGMEM = "'/> </div> <br /> <br /> <button type='submit'>Save</button> <p style='text-align: right;'></p> </form> </main> </body></html>";
+// Debug print memory: Heap: 24160    Block: 20384
+static const char setupReplySaved[] PROGMEM = "<label style='color: green'>- Saved</label>";
+static const char setupReplyCleared[] PROGMEM = "<label style='color: green'>- Cleared</label>";
+static const char setupReplyTooLong[] PROGMEM = "<label style='color: red'>- Too long</label>";
+static const char setupReplyIncorrectLength[] PROGMEM = "<label style='color: red'>- Incorrect length (need 32 bytes)</label>";
+static const char setupReplyNoChange[] PROGMEM = "<label style='color: black'>- No change</label>";
+
 FILAMENT_ESTIMATOR::FILAMENT_ESTIMATOR() : button{BUTTON_PIN},
                                            rotary{ROTARY_PIN_DT, ROTARY_PIN_CLK, stepsPerClick},
                                            display{SSD1306_ADDRESS, SSD1306_SDA_PIN, SSD1306_SCL_PIN},
@@ -155,7 +150,7 @@ void FILAMENT_ESTIMATOR::begin(void)
 void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const char *hostname, const char *blynk_auth_token)
 {
     Serial.println();
-    //Firmware version setup
+    // Firmware version setup
     convertTagToVersion(CURRENT_VERSION, &currentVersion);
 
     Serial.println("Program started.");
@@ -168,7 +163,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     Serial.print(currentVersion.patch);
     Serial.println();
 
-    //Setup for OLED
+    // Setup for OLED
     display.init();
     display.flipScreenVertically();
     display.setContrast(255);
@@ -176,7 +171,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     Serial.println("OLED setup ok.");
 
-    //Mount file system
+    // Mount file system
     fileSystemConfig.setAutoFormat(false);
     fileSystem->setConfig(fileSystemConfig);
     fsOK = fileSystem->begin();
@@ -187,7 +182,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     else
     {
         Serial.println(F("LittleFS file system mounted."));
-        //listDir("");
+        // listDir("");
     }
     /*
     numCerts = certStore.initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
@@ -197,15 +192,15 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     displayMonoBitmap("/images/logo.bmp");
 
-    //Setup for settings and eeprom
+    // Setup for settings and eeprom
     EEPROM.begin(DECLARED_EEPROM_SIZE);
-    //setting.calValue = 3.14159;
+    // setting.calValue = 3.14159;
     Serial.print(F("Size of setting struct: "));
     Serial.println((uint32_t)sizeof(setting));
 
-    //Load eeprom data to setting
+    // Load eeprom data to setting
     loadToSetting();
-    //validate data and reset to defaults
+    // validate data and reset to defaults
     bool isDirty = false;
 
     if (isnan(setting.calValue) || setting.calValue < 10)
@@ -228,10 +223,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
     lowFilament1Digit = (setting.lowFilamentThreshold / 1U) % 10;
 
-    setCalibrationWeight(setting.calibrationWeight); //set the four digits
-    //dumpSetting();
+    setCalibrationWeight(setting.calibrationWeight); // set the four digits
+    // dumpSetting();
 
-    //Initialize notification settings for the first time
+    // Initialize notification settings for the first time
     if (setting.notifyOnPrintStarted != 0 && setting.notifyOnPrintStarted != 1)
     {
         setting.notifyOnPrintStarted = true;
@@ -263,7 +258,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         isDirty = true;
     }
 
-    //Initialize services settings for the first time
+    // Initialize services settings for the first time
     if (setting.optionsWiFi != 0 && setting.optionsWiFi != 1)
     {
         setting.optionsWiFi = true;
@@ -304,10 +299,10 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         setting.optionsSpooderServer = false;
         isDirty = true;
     }
-    //Initialize auto github update settings for the first time
+    // Initialize auto github update settings for the first time
     if (setting.autoGithubUpdate != 0 && setting.autoGithubUpdate != 1)
     {
-        setting.autoGithubUpdate = false; //auto update default value is off
+        setting.autoGithubUpdate = false; // auto update default value is off
         isDirty = true;
     }
     if (setting.automaticUpdateJustPerformed != 0 && setting.automaticUpdateJustPerformed != 1)
@@ -321,7 +316,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         saveToEEPROM();
     }
 
-    //Compare firmware version
+    // Compare firmware version
 
     if (versionToNumber(currentVersion) > versionToNumber(setting.version))
     {
@@ -341,7 +336,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     }
     else
     {
-        //Same version
+        // Same version
     }
     if (setting.spoolHolderWeight < 0 or setting.spoolHolderWeight > 999)
     {
@@ -351,15 +346,15 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
         spoolHolder3Digit = (setting.spoolHolderWeight / 100U) % 10;
         spoolHolder2Digit = (setting.spoolHolderWeight / 10U) % 10;
         spoolHolder1Digit = (setting.spoolHolderWeight / 1U) % 10;
-        //Set flag, if spool holder weight is set by user in sketch, it will be stored to EEPROM.
+        // Set flag, if spool holder weight is set by user in sketch, it will be stored to EEPROM.
         noSpoolHolderWeightInEEPROM = true;
     }
 
-    //load config file
+    // load config file
     loadConfig();
-    //dumpConfig();
+    // dumpConfig();
 
-    //Setup for rotary switch
+    // Setup for rotary switch
     estimatorPointer = this;
     button.setClickHandler(globalButtonHandler);
     button.setLongClickHandler(globalButtonHandler);
@@ -368,7 +363,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     rotary.setLeftRotationHandler(globalRotaryHandler);
     rotary.setRightRotationHandler(globalRotaryHandler);
     setLongClickTime(LONG_CLICK_TIME);
-    setStepsPerClick(DEFAULT_STEPS_PER_CLICK); //This could be different for different hardware
+    setStepsPerClick(DEFAULT_STEPS_PER_CLICK); // This could be different for different hardware
 
     Serial.println(F("Rotary Switch setup ok."));
 
@@ -378,21 +373,21 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     loadcell.begin();
     loadcell.start(stabilizingTime, true);
     loadcell.setCalFactor(setting.calValue);
-    //tare();
+    // tare();
     loadcell.setTareOffset(setting.tareOffset);
 
-    //WiFi related
-    //Disable esp8266 wifi auto connection. Connection behavior is controlled by code and user.
+    // WiFi related
+    // Disable esp8266 wifi auto connection. Connection behavior is controlled by code and user.
     WiFi.setAutoConnect(false);
     WiFi.setAutoReconnect(false);
 
-    //update related
-    githubVersion.reserve(githubVersionSize); //reserve a fixed lenght for version tag, such as "11.22.33"
+    // update related
+    githubVersion.reserve(githubVersionSize); // reserve a fixed lenght for version tag, such as "11.22.33"
     _updateURL.reserve(_updateURLSize);
     setNextCheckCountdown();
 
-    //local communication related
-
+    // local communication related
+    updateSpooderServerStatusTimer = millis() + 5000; // startup delay
     uint16_t s = sizeof(dataset[0]) * MAX_NUM_OF_SPOODERS;
     Serial.print(F("Size of dataset table: "));
     Serial.println(s);
@@ -406,7 +401,7 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
 
     Serial.println(F("Setup completed."));
 
-    //Enable WiFi according to user setting
+    // Enable WiFi according to user setting
     setWifi(setting.optionsWiFi);
 }
 void FILAMENT_ESTIMATOR::update(void)
@@ -428,7 +423,7 @@ void FILAMENT_ESTIMATOR::update(void)
 
         totalWeight = loadcell.getData();
 
-        //used for development purpose
+        // used for development purpose
         if (emulationStarted == true)
         {
             totalWeight = emulatedWeight;
@@ -438,7 +433,7 @@ void FILAMENT_ESTIMATOR::update(void)
     }
     updateHomepage();
 
-    //Refresh the screen after tare message period
+    // Refresh the screen after tare message period
     if (drawOverlayFlag == true)
     {
         if (millis() - drawOverlayTimer > overlayDisplayPeriod)
@@ -470,8 +465,8 @@ void FILAMENT_ESTIMATOR::update(void)
 
     if (isLogging == true)
     {
-        //updateLogging();
-        //function moved inside updateDetection()
+        // updateLogging();
+        // function moved inside updateDetection()
     }
 
     if (emulationStarted == true)
@@ -492,12 +487,11 @@ void FILAMENT_ESTIMATOR::update(void)
 
     updateDataset();
 
-    /*
-    if (updateUdp == true)
+    if (isHotspotMode == true)
     {
-        updateUdpPacket();
+        webServer->handleClient();
+        dnsServer.processNextRequest();
     }
-    */
 }
 void FILAMENT_ESTIMATOR::setWifi(bool value)
 {
@@ -516,15 +510,25 @@ void FILAMENT_ESTIMATOR::setWifi(bool value)
     {
         if (enableWifi == true)
         {
-            enableWifi = false;
+            // turn off all dependent services
+
+            setBlynk(false);
+            setWebServer(false);
+            setSpooderClient(false);
+            setSpooderServer(false);
+            setArduinoOTA(false);
+            setMDNS(false);
+
             Serial.println(F("Wifi disabled."));
             WiFi.disconnect();
             WiFi.setAutoReconnect(false);
             wifiStatus = WIFI_STATUS_DISABLED;
-            displayPage(currentPage); //Refresh page for WIFI symbol change
+            enableWifi = false;
+
+            displayPage(currentPage); // Refresh page for WIFI symbol change
         }
     }
-    //globalPrintMemory("setWifi: ");
+    // globalPrintMemory("setWifi: ");
 }
 void FILAMENT_ESTIMATOR::updateWifi()
 {
@@ -540,7 +544,9 @@ void FILAMENT_ESTIMATOR::updateWifi()
             Serial.println(WiFi.localIP().toString());
             Serial.print("Hostname = ");
             Serial.println(WiFi.hostname());
-            displayPage(currentPage); //Refresh page for WIFI symbol change
+            WiFi.setSleepMode(WIFI_NONE_SLEEP); // Test if this fix the 7-day dropoff problem
+
+            displayPage(currentPage); // Refresh page for WIFI symbol change
             beginServices();
         }
         break;
@@ -559,12 +565,13 @@ void FILAMENT_ESTIMATOR::updateWifi()
         {
             webServer->handleClient();
         }
-        if (enableSpooderClient == true)
+        if (enableSpooderClient == true) // Acting as client
         {
-            if (updateWebsockets == true) //only for acting as server
-            {
-                updateWebsocketsServer();
-            }
+            updateSpooderClient();
+        }
+        if (enableSpooderServer == true) // Acting as server
+        {
+            updateSpooderServer(); // Perform server related functions
         }
         if (enableArduinoOTA == true)
         {
@@ -574,67 +581,18 @@ void FILAMENT_ESTIMATOR::updateWifi()
         {
             updateNetworkTime();
         }
-        switch (spooderClientState)
-        {
-        case NONE:
-        {
-            break;
-        }
 
-        case SEARCHING_FOR_CONNECTION:
-        {
-            if (millis() - searchingForConnectionTimer > SEARCHING_FOR_CONNECTION_PERIOD)
-            {
-                //Serial.println("Check spooder server status.");
-                searchingForConnectionTimer = millis();
-                uint32_t numAns = MDNS.answerCount(hMDNSServiceQuery);
-                if (0)
-                {
-                    for (uint8_t i = 0; i < numAns; i++)
-                    {
-                        if (isAnswerValidServer(i))
-                        {
-                            Serial.print(i);
-                            Serial.println(" is valid.");
-                        }
-                        else
-                        {
-                            Serial.print(i);
-                            Serial.println(" is not valid.");
-                        }
-                    }
-                }
-            }
-            break;
-        }
-
-        case CONNECTED_TO_SERVER:
-        {
-
-            break;
-        }
-
-        case RECONNECTING_TO_SERVER:
-        {
-
-            break;
-        }
-
-        default:
-        {
-            break;
-        }
-
-        } //switch (spooderClientState)
-    }     //case WIFI_STATUS_CONNECTED:
+    } // case WIFI_STATUS_CONNECTED:
 
     default:
         break;
-    } //switch (wifiStatus)
+    } // switch (wifiStatus)
 }
 bool FILAMENT_ESTIMATOR::isAnswerValidServer(uint8_t index)
 {
-    //Serial.println("Validating answer:");
+    if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+
+        Serial.println("Validating answer:");
     /*
     valid hostname example: spooderA1.local
     Checking validity
@@ -654,14 +612,17 @@ bool FILAMENT_ESTIMATOR::isAnswerValidServer(uint8_t index)
         uint8_t len = strlen(MDNS.answerHostDomain(hMDNSServiceQuery, index));
         if (len != 15 && len != 16)
         {
-            //Serial.println(F("  Hostname length is invalid."));
+            if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+
+                Serial.println(F("  Hostname length is invalid."));
             isValid = false;
         }
-        else //has correct length 15 or 16
+        else // has correct length 15 or 16
         {
             if (strstr(MDNS.answerHostDomain(hMDNSServiceQuery, index), "spooder") != NULL)
             {
-                //Serial.println(F("  Hostname contains 'spooder"));
+                if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+                    Serial.println(F("  Hostname contains 'spooder"));
             }
             else
             {
@@ -670,7 +631,8 @@ bool FILAMENT_ESTIMATOR::isAnswerValidServer(uint8_t index)
 
             if (strstr(MDNS.answerHostDomain(hMDNSServiceQuery, index), ".local") != NULL)
             {
-                //Serial.println(F("  Hostname contains '.local"));
+                if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+                    Serial.println(F("  Hostname contains '.local"));
             }
             else
             {
@@ -678,51 +640,211 @@ bool FILAMENT_ESTIMATOR::isAnswerValidServer(uint8_t index)
             }
         }
     }
-    else //if (MDNS.hasAnswerHostDomain(hMDNSServiceQuery, index) == true)
+    else // if (MDNS.hasAnswerHostDomain(hMDNSServiceQuery, index) == true)
     {
-        //Serial.println(F("  Hostname does not exist."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("  Hostname does not exist."));
         isValid = false;
     }
 
     if (MDNS.hasAnswerIP4Address(hMDNSServiceQuery, index) == true)
     {
-        //Serial.println(F("  IP adress exists."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("  IP adress exists."));
     }
     else
     {
-        //Serial.println(F("  IP adress does not exist."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("  IP adress does not exist."));
         isValid = false;
     }
 
     if (MDNS.hasAnswerPort(hMDNSServiceQuery, index) == true)
     {
-        //Serial.println(F("  Port exists."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("  Port exists."));
         if (MDNS.answerPort(hMDNSServiceQuery, index) == websocketsPort)
         {
-            //Serial.println(F("  Port number is correct."));
+            if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+                Serial.println(F("  Port number is correct."));
         }
         else
 
         {
-            //Serial.println(F("  Port number is not correct."));
+            if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+                Serial.println(F("  Port number is not correct."));
             isValid = false;
         }
     }
     else
     {
-        //Serial.println(F("  Port does not exist."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("  Port does not exist."));
         isValid = false;
     }
     if (isValid == true)
     {
-        //Serial.println(F("The answer is a valid server."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("The answer is a valid server."));
     }
     else
     {
-        // Serial.println(F("The answer is not a valid server."));
+        if (VERBOSE_DEBUG_PRINT_VALIDATE_ANSWER == true)
+            Serial.println(F("The answer is not a valid server."));
     }
 
     return isValid;
+}
+void FILAMENT_ESTIMATOR::connectSpooderServer(uint8_t serverIndex)
+{
+    Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, serverIndex));
+    Serial.print(" (");
+    Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, serverIndex, 0)); // only list the first(index==0) ip
+    Serial.print(":");
+    Serial.print(MDNS.answerPort(hMDNSServiceQuery, serverIndex));
+    Serial.print(")");
+    IPAddress serverIP = MDNS.answerIP4Address(hMDNSServiceQuery, serverIndex, 0);
+    uint16_t serverPort = MDNS.answerPort(hMDNSServiceQuery, serverIndex);
+
+    // try to connect to Websockets server
+    bool connected = webSocketsClient.connect(
+        serverIP.toString(),
+        serverPort, "/");
+    if (connected)
+    {
+        Serial.println("Connecetd!");
+
+        // run callback when messages are received
+        webSocketsClient.onMessage(globalHandleWebsocketsMessage);
+        webSocketsClient.onEvent(globalHandleWebsocketsEvent);
+    }
+    else
+    {
+        Serial.println("Not Connected!");
+    }
+    serverConnectionStatus[0] = connected ? CONNECTED : NOT_CONNECTED;
+}
+void FILAMENT_ESTIMATOR::handleWebsocketsMessage(WebsocketsClient &client, WebsocketsMessage message)
+{
+
+    if (message.isText())
+    {
+        Serial.print("Got text message: ");
+        auto data = message.data();
+        Serial.println(data);
+
+        if (data.indexOf("server!") > 0)
+        {
+            // got message from server
+            Serial.println("Send: Hello from client!");
+            client.send("Hello from client!");
+        }
+        else if (data.indexOf("client!") > 0)
+        {
+            // got reply from client
+            WEBSOCKETS_HOLDER holder;
+            holder.p.num = 20;
+            strcpy(holder.p.str, "hello");
+            holder.p.weight = 113.22;
+            packetAddress = &holder.p;
+
+            Serial.print("Send test packet:");
+            for (uint8_t i = 0; i < sizeof(holder.p); ++i)
+                Serial.printf("%02x", holder.str[i]);
+            Serial.println();
+
+            Serial.print("Size of packet =");
+            Serial.println(sizeof(holder.p));
+
+            client.sendBinary((char *)packetAddress, sizeof(holder.p));
+        }
+    }
+    else if (message.isBinary())
+    {
+        // got a test packet
+        Serial.print("Got binary len = ");
+        Serial.println(message.length());
+
+        WEBSOCKETS_HOLDER holder;
+        Serial.print("Size of WEBSOCKETS_HOLDER = ");
+        Serial.println(sizeof(holder));
+
+        memcpy(holder.str, message.c_str(), message.length());
+
+        Serial.print("Got test packet:");
+        for (uint8_t i = 0; i < sizeof(holder.p); ++i)
+            Serial.printf("%02x", holder.str[i]);
+        Serial.println();
+
+        Serial.println(holder.p.num);
+        Serial.println(holder.p.str);
+        Serial.println(holder.p.weight);
+    }
+}
+void FILAMENT_ESTIMATOR::handleWebsocketsEvent(WebsocketsClient &client, WebsocketsEvent event, String data)
+{
+    switch (event)
+    {
+    case WebsocketsEvent::ConnectionOpened:
+        Serial.println("Connection opened");
+
+        break;
+    case WebsocketsEvent::ConnectionClosed:
+        Serial.print("Connection closed:");
+        Serial.println(client.getCloseReason());
+        /*
+        CloseReason_None                =       -1,
+        CloseReason_NormalClosure       =       1000,
+        CloseReason_GoingAway           =       1001,
+        CloseReason_ProtocolError       =       1002,
+        CloseReason_UnsupportedData     =       1003,
+        CloseReason_NoStatusRcvd        =       1005,
+        CloseReason_AbnormalClosure     =       1006,
+        CloseReason_InvalidPayloadData  =       1007,
+        CloseReason_PolicyViolation     =       1008,
+        CloseReason_MessageTooBig       =       1009,
+        CloseReason_InternalServerError =       1011,
+        */
+        break;
+    case WebsocketsEvent::GotPing:
+        Serial.println("Got ping.");
+        break;
+    case WebsocketsEvent::GotPong:
+        Serial.println("Got pong");
+        break;
+    default:
+        break;
+    }
+}
+void FILAMENT_ESTIMATOR::updateSpooderServer()
+{
+    // Perform looped tasks
+
+    updateWebsocketsServer();
+
+    // Perform periodic tasks
+    if (millis() - updateSpooderServerStatusTimer < UPDATE_SPOODER_SERVER_STATUS_PEROID)
+        return;
+    // if (VERBOSE_DEBUG_PRINT == true)
+    // Serial.println(F("Updating Spooder Server periodic tasks:"));
+
+    updateSpooderServerStatusTimer = millis();
+}
+void FILAMENT_ESTIMATOR::updateSpooderClient()
+{
+    // Perform looped tasks
+
+    updateWebsocketsClient();
+
+    // Perform periodic tasks
+    if (millis() - updateSpooderClientTimer < UPDATE_SPOODER_CLIENT_PEROID)
+    {
+    }
+    return;
+    // if (VERBOSE_DEBUG_PRINT == true)
+    // Serial.println(F("Updating Spooder Server periodic tasks:"));
+
+    updateSpooderClientTimer = millis();
 }
 void FILAMENT_ESTIMATOR::updateNetworkTime()
 {
@@ -732,7 +854,7 @@ void FILAMENT_ESTIMATOR::updateNetworkTime()
         return;
     }
 
-    //Check if the network time has been received, using year>2000
+    // Check if the network time has been received, using year>2000
     time_t now = time(nullptr);
     tm *tmp = localtime(&now);
 
@@ -742,10 +864,10 @@ void FILAMENT_ESTIMATOR::updateNetworkTime()
         {
             netWorkTimeReceived = true;
             Serial.print(F("Network time received: "));
-            Serial.print(ctime(&now)); //ctime includes "\n"
+            Serial.print(ctime(&now)); // ctime includes "\n"
         }
     }
-    else //netWorkTimeReceived == false
+    else // netWorkTimeReceived == false
     {
     }
 
@@ -754,21 +876,18 @@ void FILAMENT_ESTIMATOR::updateNetworkTime()
 void FILAMENT_ESTIMATOR::connectWifi()
 {
 
-    /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
-     would try to act as both a client and an access-point and could cause
-     network-issues with your other WiFi-devices on your WiFi-network. */
     WiFi.mode(WIFI_STA);
     Serial.print("Set WiFi Hostname to: ");
     Serial.println(hostname);
-    WiFi.hostname(hostname); //Need this here for windows mDns to work
+    WiFi.hostname(hostname); // Need this here for windows mDns to work
     WiFi.begin(wifi_ssid, wifi_password);
     Serial.print(F("Connecting to "));
     Serial.println(wifi_ssid);
 }
 void FILAMENT_ESTIMATOR::beginServices()
 {
-    //Serial.println("Check Gitgub at beginServices():");
-    //globalCheckGithubTag(false);
+    // Serial.println("Check Gitgub at beginServices():");
+    // globalCheckGithubTag(false);
     if (WiFi.status() != WL_CONNECTED)
     {
         Serial.println(F("WiFi not connected."));
@@ -803,19 +922,19 @@ void FILAMENT_ESTIMATOR::beginServices()
         configTime(TZ_Etc_GMT, "pool.ntp.org");
     }
 
-    //Serial.println(F("NTP started."));
+    // Serial.println(F("NTP started."));
 
     Serial.println(F("Services started."));
 }
 void FILAMENT_ESTIMATOR::setMDNS(bool value)
 {
-    if (value == true) //turn on mDNS
+    if (value == true) // turn on mDNS
     {
         if (WiFi.status() != WL_CONNECTED)
         {
-            Serial.println(F("Failed. WiFi not connected."));
+            Serial.println(F("MDNS Failed. WiFi not connected."));
         }
-        else //Wifi is connected
+        else // Wifi is connected
         {
             if (MDNS.isRunning())
             {
@@ -826,7 +945,7 @@ void FILAMENT_ESTIMATOR::setMDNS(bool value)
                     Serial.println(hostname);
                 }
             }
-            else //MDNS is not running
+            else // MDNS is not running
             {
                 if (validSpooderID == true)
                 {
@@ -835,46 +954,46 @@ void FILAMENT_ESTIMATOR::setMDNS(bool value)
                     if (MDNS.begin(hostname) == true)
                     {
                         Serial.println(F(" succeeded."));
-                        //add service announcements
-                        MDNS.addService(0, "http", "tcp", 80); //for web access
+                        // add service announcements
+                        MDNS.addService(0, "http", "tcp", 80); // for web access
 
-                        //put own ID into dataset index 0
-                        //get the position of '.'
+                        // put own ID into dataset index 0
+                        // get the position of '.'
                         strncpy(dataset[0].spooderID, hostname.c_str() + 7, strlen(hostname.c_str()) - 7);
-                        //Serial.print(F("Copy ID into own dataset."));
-                        //Serial.println(dataset[0].spooderID);
+                        // Serial.print(F("Copy ID into own dataset."));
+                        // Serial.println(dataset[0].spooderID);
                     }
                     else
                     {
                         Serial.println(" failed.");
                     }
                 }
-                else //no valid spooder ID
+                else // no valid spooder ID
                 {
                     Serial.println("Invalid spooder ID, mDNS not started.");
                 }
-            } //MDNS is not running
+            } // MDNS is not running
         }
 
-    }    //turn on mDNS
-    else //turn off mDNS
+    }    // turn on mDNS
+    else // turn off mDNS
     {
         if (MDNS.isRunning())
         {
             hMDNSServiceQuery = 0;
             MDNS.close();
             Serial.println(F("mDNS stopped."));
-            clearDataset(0); //clear own data
+            clearDataset(0); // clear own data
 
-            //close server, if opened
+            // close server, if opened
 
-            //stop spooder client, if opended
+            // stop spooder client, if opended
         }
-        else //MDNS is not running
+        else // MDNS is not running
         {
             Serial.println(F("mDNS not started."));
         }
-    } //turn off mDNS
+    } // turn off mDNS
 
     return;
 }
@@ -913,10 +1032,18 @@ void FILAMENT_ESTIMATOR::listSpooderService()
 }
 void FILAMENT_ESTIMATOR::updateWebsocketsServer()
 {
-    listenForWebsocketsClients();
-    pollWebsocketsClients();
+    spooderServerListenForWebsocketsClients();
+    spooderServerPollWebsocketsClients();
 }
-void FILAMENT_ESTIMATOR::listenForWebsocketsClients()
+void FILAMENT_ESTIMATOR::updateWebsocketsClient()
+{
+    // websockets client side check for incoming messages
+    if (webSocketsClient.available())
+    {
+        webSocketsClient.poll();
+    }
+}
+void FILAMENT_ESTIMATOR::spooderServerListenForWebsocketsClients()
 {
     if (webSocketsServer.poll())
     {
@@ -938,7 +1065,7 @@ void FILAMENT_ESTIMATOR::listenForWebsocketsClients()
         }
     }
 }
-void FILAMENT_ESTIMATOR::pollWebsocketsClients()
+void FILAMENT_ESTIMATOR::spooderServerPollWebsocketsClients()
 {
     for (byte i = 0; i < maxClients; i++)
     {
@@ -956,41 +1083,12 @@ int8_t FILAMENT_ESTIMATOR::getFreeClientIndex()
     }
     return -1;
 }
-
-/*void FILAMENT_ESTIMATOR::updateUdpPacket()
-{
-    int packetSize = Udp.parsePacket();
-    if (packetSize)
-    {
-        // receive incoming UDP packets
-        Serial.printf("Received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
-        if (packetSize >= UDP_PACKET_SIZE_LIMIT)
-        {
-            Serial.println(F("Buffer overflow."));
-            //clears udp buffer
-            while (Udp.available())
-            {
-                Udp.read();
-            }
-        }
-        else
-        {
-            int len = Udp.read(udpPacketBuffer, UDP_PACKET_SIZE_LIMIT);
-            if (len > 0)
-            {
-                udpPacketBuffer[len] = 0;
-            }
-            Serial.printf("UDP packet contents: %s\n", udpPacketBuffer);
-            //clears packet buffer
-            udpPacketBuffer[0] = 0;
-        }
-    }
-}
-*/
 void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo *serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
     listMDNSDynamicQueryAnswer();
     return;
+    // Not printing out answers
+    /*
     if (answerType == MDNSResponder::AnswerType::IP4Address && p_bSetContent == true)
     {
         Serial.print("===== ");
@@ -1038,6 +1136,7 @@ void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo
         answerInfo = "Unknown Answertype";
     }
     Serial.printf("Answer %s %s\n", answerInfo.c_str(), p_bSetContent ? "Modified" : "Deleted");
+    */
 }
 void FILAMENT_ESTIMATOR::updateDataset()
 {
@@ -1055,56 +1154,56 @@ void FILAMENT_ESTIMATOR::updateDataset()
         return;
     }
 
-    //update own dataset
+    // update own dataset
     dataset[0].fw = (int16_t)filamentWeight;
 
-    //announce to others
+    // announce to others
     updateServiceTxt();
 }
 void FILAMENT_ESTIMATOR::copyDatasetFromServiceInfo()
 {
-    //Serial.println(F("Copy all data from ServiceInfo into dataset:"));
+    // Serial.println(F("Copy all data from ServiceInfo into dataset:"));
 
-    uint16_t index = 0; //used as dataset[index]
-    //Serial.print(F("answerInfo size = "));
-    //Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
+    uint16_t index = 0; // used as dataset[index]
+    // Serial.print(F("answerInfo size = "));
+    // Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
     if (MDNS.answerInfo(hMDNSServiceQuery).size() == 0)
         return;
-    //Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
+    // Serial.println(MDNS.answerInfo(hMDNSServiceQuery).size());
 
     for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
     {
         index++;
-        //copy ID into dataset
+        // copy ID into dataset
         if (info.hostDomainAvailable())
-        { //info.hostDomain() example: spooderA2.local
+        { // info.hostDomain() example: spooderA2.local
             if (strncmp(info.hostDomain(), "spooder", 7) == 0)
             {
-                //get the position of '.'
+                // get the position of '.'
                 uint8_t pos;
                 char *dotPtr = strchr(info.hostDomain(), '.');
                 if (dotPtr != NULL)
                 {
                     pos = dotPtr - info.hostDomain() + 1;
-                    //Serial.print(F("'.' found at "));
-                    //Serial.println(pos); //'.' found at 10
-                    //copy 'A2' or 'A13' into spooderID
+                    // Serial.print(F("'.' found at "));
+                    // Serial.println(pos); //'.' found at 10
+                    // copy 'A2' or 'A13' into spooderID
                     strncpy(dataset[index].spooderID, info.hostDomain() + 7, pos - 8);
                 }
             }
-        } //if (info.hostDomainAvailable())
-        //copy txt info into dataset
+        } // if (info.hostDomainAvailable())
+        // copy txt info into dataset
         if (info.txtAvailable())
         {
-            //FW: filament weight in gram
+            // FW: filament weight in gram
             if (info.value("FW") != nullptr)
             {
                 dataset[index].fw = atoi(info.value("FW"));
-                //Serial.println(dataset[index].fw);
+                // Serial.println(dataset[index].fw);
             }
-        } //if (info.txtAvailable())
+        } // if (info.txtAvailable())
         datasetLastPopulatedIndex = index;
-    } //for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
+    } // for (auto info : MDNS.answerInfo(hMDNSServiceQuery))
 }
 void FILAMENT_ESTIMATOR::staticQueryMDNS()
 {
@@ -1117,7 +1216,7 @@ void FILAMENT_ESTIMATOR::staticQueryMDNS()
         {
             Serial.println("No services found.");
         }
-        else //services found
+        else // services found
         {
             Serial.print(n);
             Serial.println(" service(s) found");
@@ -1138,7 +1237,7 @@ void FILAMENT_ESTIMATOR::staticQueryMDNS()
             }
         }
     }
-    else //MDNS is not running on this device
+    else // MDNS is not running on this device
     {
         Serial.println(F("Failed. mDNS is not running."));
     }
@@ -1157,7 +1256,7 @@ void FILAMENT_ESTIMATOR::removeStaticQuery()
             Serial.println(F("Static query not removed."));
         }
     }
-    else //MDNS is not running on this device
+    else // MDNS is not running on this device
     {
         Serial.println(F("Failed. mDNS is not running."));
     }
@@ -1165,24 +1264,34 @@ void FILAMENT_ESTIMATOR::removeStaticQuery()
 void FILAMENT_ESTIMATOR::listMDNSDynamicQueryAnswer()
 {
     uint32_t numAns = MDNS.answerCount(hMDNSServiceQuery);
-    Serial.print(numAns);
-    Serial.println(" service(s) found");
-    if (numAns > 0)
+    if (VERBOSE_DEBUG_PRINT == true)
     {
-        for (int i = 0; i < numAns; i++)
+        // Serial.print(numAns);
+        // Serial.println(" service(s) found");
+        if (numAns > 0)
         {
-            // Print details for each service found
-            Serial.print(i);
-            Serial.print(": ");
-            Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
-            Serial.print(" (");
-            Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); //only list the first(index==0) ip
-            Serial.print(":");
-            Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
-            Serial.print(")");
-            Serial.println();
+            for (int i = 0; i < numAns; i++)
+            {
+                if (isAnswerValidServer(i) == true)
+                {
+                    // Print details for each service found
+                    Serial.print(F("Valid server at index "));
+                    Serial.print(i);
+                    Serial.print(": ");
+                    Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
+                    Serial.print(" (");
+                    Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); // only list the first(index==0) ip
+                    Serial.print(":");
+                    Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
+                    Serial.print(")");
 
-            isAnswerValidServer(i);
+                    Serial.println();
+                }
+                else
+                {
+                    // Serial.print(F("Invalid :"));
+                }
+            }
         }
     }
 }
@@ -1190,18 +1299,18 @@ void FILAMENT_ESTIMATOR::updateServiceTxt()
 {
     if (MDNS.isRunning() == false)
     {
-        //Serial.println(F("Failed. mDNS is not running."));
+        // Serial.println(F("Failed. mDNS is not running."));
         return;
     }
 
-    //Serial.print(F("Update mDNS service txt: filament,"));
-    //Serial.print((int16_t)filamentWeight);
-    //Serial.println();
+    // Serial.print(F("Update mDNS service txt: filament,"));
+    // Serial.print((int16_t)filamentWeight);
+    // Serial.println();
 
-    //MDNS.addDynamicServiceTxt(spooderService, "FW", (int16_t)filamentWeight);
-    // 'announce' can be called every time, the configuration of some service
-    // changes. Mainly, this would be changed content of TXT items.
-    //MDNS.announce();
+    // MDNS.addDynamicServiceTxt(spooderService, "FW", (int16_t)filamentWeight);
+    //  'announce' can be called every time, the configuration of some service
+    //  changes. Mainly, this would be changed content of TXT items.
+    // MDNS.announce();
     return;
 }
 void FILAMENT_ESTIMATOR::printSpoodersDataset()
@@ -1247,28 +1356,29 @@ void FILAMENT_ESTIMATOR::sortDataset()
 }
 void FILAMENT_ESTIMATOR::setBlynk(bool value)
 {
-    if (WiFi.status() != WL_CONNECTED)
+
+    if (value == true) // turn on blynk
     {
-        Serial.println(F("Failed. WiFi not connected."));
-        return;
-    }
-    if (value == true) //turn on blynk
-    {
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            Serial.println(F("Blynk failed. WiFi not connected."));
+            return;
+        }
         enableBlynk = true;
         if (Blynk.connected() == true)
         {
-            Serial.print(F("Blynk already connected."));
+            Serial.println(F("Blynk already connected."));
         }
-        else //Blynk not connected yet
+        else // Blynk not connected yet
         {
             Serial.print(F("Connecting Blynk using:"));
             Serial.println(blynk_auth);
 
-            //Not using Blynk.begin(), because it
-            //1.Connection to the network (WiFi, Ethernet, …)
-            //2.Call of Blynk.config(...) to set Auth Token, Server Address, etc.
-            //3.Attempts to connect to the server once (can block for more than 30s)
-            //WiFi is controlled by code/user
+            // Not using Blynk.begin(), because it
+            // 1.Connection to the network (WiFi, Ethernet, …)
+            // 2.Call of Blynk.config(...) to set Auth Token, Server Address, etc.
+            // 3.Attempts to connect to the server once (can block for more than 30s)
+            // WiFi is controlled by code/user
 
             Blynk.config(blynk_auth);
             Blynk.connect(3000);
@@ -1287,7 +1397,7 @@ void FILAMENT_ESTIMATOR::setBlynk(bool value)
             }
         }
     }
-    else //turn off blynk
+    else // turn off blynk
     {
         enableBlynk = false;
         if (Blynk.CONNECTED == true)
@@ -1295,28 +1405,29 @@ void FILAMENT_ESTIMATOR::setBlynk(bool value)
             Blynk.disconnect();
             Serial.println(F("Blynk disonnected."));
         }
-        else //Blynk not connected yet
+        else // Blynk not connected yet
         {
             Serial.print(F("Blynk not connected."));
         }
     }
-    displayPage(currentPage); //Refresh page for blynk symbol change
-    //globalPrintMemory("setBlynk: ");
+    displayPage(currentPage); // Refresh page for blynk symbol change
+    // globalPrintMemory("setBlynk: ");
 }
 void FILAMENT_ESTIMATOR::setWebServer(bool value)
 {
-    if (WiFi.status() != WL_CONNECTED)
+
+    if (value == true) // turn on web server
     {
-        Serial.println(F("Failed. WiFi not connected."));
-        return;
-    }
-    if (value == true) //turn on web server
-    {
-        if (enableWebServer == true) //already enabled
+        if (WiFi.status() != WL_CONNECTED && isHotspotMode == false)
+        {
+            Serial.println(F("Web server failed. WiFi not connected."));
+            return;
+        }
+        if (enableWebServer == true) // already enabled
         {
             Serial.println(F("Web Server already enabled."));
         }
-        else //enable simple web server for file management
+        else // enable simple web server for file management
         {
             webServer = new ESP8266WebServer(80);
 
@@ -1341,6 +1452,9 @@ void FILAMENT_ESTIMATOR::setWebServer(bool value)
             // - second callback handles file upload at that location
             webServer->on("/edit", HTTP_POST, globalReplyOK, globalHandleFileUpload);
 
+            // Spooder Setup Save
+            webServer->on("/", HTTP_POST, globalHandleSetupSave);
+
             // Default handler for all URIs not defined above
             // Use it to read files from filesystem
             webServer->onNotFound(globalHandleNotFound);
@@ -1358,86 +1472,85 @@ void FILAMENT_ESTIMATOR::setWebServer(bool value)
             }
             Serial.println();
         }
-    }    //turn on web server
-    else //trun off web server
+    }    // turn on web server
+    else // trun off web server
     {
-        if (enableWebServer == true) //disable web server
+        if (enableWebServer == true) // disable web server
         {
             webServer->close();
             delete webServer;
             enableWebServer = false;
             Serial.println(F("Web Server disabled."));
         }
-        else //not enabled
+        else // not enabled
         {
             Serial.println(F("Web Server already disabled."));
         }
-    } //trun off web server
-    //globalPrintMemory("setServer: ");
+    } // trun off web server
+    // globalPrintMemory("setServer: ");
     return;
 }
 void FILAMENT_ESTIMATOR::setSpooderClient(bool value)
 {
-    if (WiFi.status() != WL_CONNECTED)
+
+    if (value == true) // turn on Spooder Client
     {
-        Serial.println(F("Failed. WiFi not connected."));
-        return;
-    }
-    if (value == true) //turn on Spooder Client
-    {
-        if (enableSpooderClient == true) //already enabled
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            Serial.println(F("Spooder Client failed. WiFi not connected."));
+            return;
+        }
+        if (enableSpooderClient == true) // already enabled
         {
             Serial.println(F("Spooder Client already enabled."));
         }
-        else //enable SpooderClient
+        else // enable SpooderClient
         {
             Serial.println(F("Spooder Client enabled"));
             installDynamicServiceQuery();
-            spooderClientState = SEARCHING_FOR_CONNECTION;
             enableSpooderClient = true;
         }
-    }    //turn on Spooder Client
-    else //trun off Spooder Client
+    }    // turn on Spooder Client
+    else // trun off Spooder Client
     {
-        if (enableSpooderClient == true) //disable Spooder Client
+        if (enableSpooderClient == true) // disable Spooder Client
         {
             Serial.println(F("Spooder Client disabled."));
             removeDynamicServiceQuery();
-            spooderClientState = NONE;
             enableSpooderClient = false;
         }
-        else //SpooderClient not enabled
+        else // SpooderClient not enabled
         {
             Serial.println(F("Spooder Client already disabled."));
         }
-    } //trun off Spooder Client
+    } // trun off Spooder Client
     return;
 }
 void FILAMENT_ESTIMATOR::setSpooderServer(bool value)
 {
-    if (WiFi.status() != WL_CONNECTED)
+    if (value == true) // turn on Spooder Server
     {
-        Serial.println(F("Failed. WiFi not connected."));
-        return;
-    }
-    if (value == true) //turn on Spooder Server
-    {
-        if (enableSpooderServer == true) //already enabled
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            Serial.println(F("SpooderServer failed. WiFi not connected."));
+            return;
+        }
+        if (enableSpooderServer == true) // already enabled
         {
             Serial.println(F("Spooder Server already enabled."));
         }
-        else //enable Spooder Server
+        else // enable Spooder Server
         {
             if (!spooderService)
             {
-                spooderService = MDNS.addService(0, "spooder", "tcp", websocketsPort); //for inter-device data exchange, using tcp packet
+                spooderService = MDNS.addService(0, "spooder", "tcp", websocketsPort); // for inter-device data exchange, using tcp packet
                 if (spooderService)
                 {
                     Serial.print(F("Spooder Service: 'spooder.tcp' port:"));
                     Serial.print(websocketsPort);
                     Serial.println(F(" install succeeded."));
 
-                    //Configure websockets server and clients
+                    // Configure websockets server and clients
                     webSocketsServer.listen(websocketsPort);
 
                     Serial.print(F("Websocket server is "));
@@ -1446,20 +1559,15 @@ void FILAMENT_ESTIMATOR::setSpooderServer(bool value)
                     Serial.print(F("Max number of clients: "));
                     Serial.println(maxClients);
 
-                    //globalPrintMemory("Before client instantiation");
+                    // globalPrintMemory("Before client instantiation");
 
-                    //create clients dynamically
+                    // create clients dynamically so that memory can be released
                     for (uint8_t i = 0; i < maxClients; i++)
                     {
                         WebsocketsClient client;
                         webSocketsClientsVector.push_back(client);
                     }
-                    //globalPrintMemory("After client instantiation");
-                    //configure udp packet handler
-                    // Udp.begin(localUdpPort);
-                    //Serial.println(F("Listening udp packets."));
-                    //updateUdp = true;
-
+                    // globalPrintMemory("After client instantiation");
                     /*
                     Websocket server is started.
                     Max number of clients: 20
@@ -1468,8 +1576,6 @@ void FILAMENT_ESTIMATOR::setSpooderServer(bool value)
                     */
 
                     // Enable websockets server handling
-
-                    updateWebsockets = true;
                     enableSpooderServer = true;
                 }
                 else
@@ -1487,69 +1593,67 @@ void FILAMENT_ESTIMATOR::setSpooderServer(bool value)
                 enableSpooderServer = true;
             }
         }
-    }    //turn on Spooder Server
-    else //trun off Spooder Server
+    }    // turn on Spooder Server
+    else // trun off Spooder Server
     {
-        if (enableSpooderServer == true) //disable Spooder Server
+        if (enableSpooderServer == true) // disable Spooder Server
         {
             if (spooderService)
             {
                 MDNS.removeService(spooderService);
                 MDNS.announce();
                 Serial.println(F("Spooder Service: 'spooder.tcp' removed."));
-                //globalPrintMemory("Before client removal"); // Heap: 25872    Block: 22096
-                std::vector<WebsocketsClient>().swap(webSocketsClientsVector); //This frees up memory
-                //globalPrintMemory("After client removal"); //Heap: 31992    Block: 30184
+                // globalPrintMemory("Before client removal"); // Heap: 25872    Block: 22096
+                std::vector<WebsocketsClient>().swap(webSocketsClientsVector); // This frees up memory
+                // globalPrintMemory("After client removal"); //Heap: 31992    Block: 30184
                 spooderService = 0;
-                updateWebsockets = false;
                 enableSpooderServer = false;
             }
             else
             {
                 Serial.println(F("Spooder Service not running."));
-                updateWebsockets = false;
                 enableSpooderServer = false;
             }
         }
-        else //Spooder Server not enabled
+        else // Spooder Server not enabled
         {
             Serial.println(F("Spooder Server already disabled."));
         }
-    } //trun off Spooder Server
+    } // trun off Spooder Server
     return;
 }
 void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
 {
-    if (WiFi.status() != WL_CONNECTED)
+
+    if (value == true) // enable arduino OTA
     {
-        Serial.println(F("WiFi not connected."));
-        if (MDNS.isRunning() == false)
+
+        if (WiFi.status() != WL_CONNECTED)
         {
-            Serial.println(F("mDNS not running."));
-        }
-        return; //conditions not met
-    }           //(WiFi.status() != WL_CONNECTED)
-    else        //WiFi connected and mDNS running:
-    {
-        if (value == true) //enable arduino OTA
-        {
-            if (enableArduinoOTA == true) //already enabled
+            Serial.println(F("ArduinoOTA failed. WiFi not connected."));
+            if (MDNS.isRunning() == false)
             {
-                Serial.println(F("Arduino OTA already enabled."));
+                Serial.println(F("mDNS not running."));
             }
-            else //enable arduino OTA
-            {
-                ArduinoOTA = new ArduinoOTAClass;
-                //Setup for OTA
-                ArduinoOTA->setHostname(hostname.c_str()); //set ArduinoOTA hostname before onStart()
-                ArduinoOTA->onStart([]()
-                                    { Serial.println("Start"); });
-                ArduinoOTA->onEnd([]()
-                                  { Serial.println("\nEnd"); });
-                ArduinoOTA->onProgress([](unsigned int progress, unsigned int total)
-                                       { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
-                ArduinoOTA->onError([](ota_error_t error)
-                                    {
+            return;                   // conditions not met
+        }                             //(WiFi.status() != WL_CONNECTED)
+        if (enableArduinoOTA == true) // already enabled
+        {
+            Serial.println(F("Arduino OTA already enabled."));
+        }
+        else // enable arduino OTA
+        {
+            ArduinoOTA = new ArduinoOTAClass;
+            // Setup for OTA
+            ArduinoOTA->setHostname(hostname.c_str()); // set ArduinoOTA hostname before onStart()
+            ArduinoOTA->onStart([]()
+                                { Serial.println("Start"); });
+            ArduinoOTA->onEnd([]()
+                              { Serial.println("\nEnd"); });
+            ArduinoOTA->onProgress([](unsigned int progress, unsigned int total)
+                                   { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+            ArduinoOTA->onError([](ota_error_t error)
+                                {
                                         Serial.printf("Error[%u]: ", error);
                                         if (error == OTA_AUTH_ERROR)
                                             Serial.println("Auth Failed");
@@ -1560,41 +1664,40 @@ void FILAMENT_ESTIMATOR::setArduinoOTA(bool value)
                                         else if (error == OTA_RECEIVE_ERROR)
                                             Serial.println("Receive Failed");
                                         else if (error == OTA_END_ERROR)
-                                            Serial.println("End Failed");
-                                    });
-                ArduinoOTA->begin();
-                enableArduinoOTA = true;
+                                            Serial.println("End Failed"); });
+            ArduinoOTA->begin();
+            enableArduinoOTA = true;
 
-                Serial.print(F("ArduinoOTA hostname: "));
-                Serial.println(ArduinoOTA->getHostname());
-                Serial.println(F("Arduino OTA enabled."));
-            }
-        }    //(value == true) //enable arduino OTA
-        else //(value == false) disable arduino OTA
+            Serial.print(F("ArduinoOTA hostname: "));
+            Serial.println(ArduinoOTA->getHostname());
+            Serial.println(F("Arduino OTA enabled."));
+        }
+    }    //(value == true) //enable arduino OTA
+    else //(value == false) disable arduino OTA
+    {
+        if (enableArduinoOTA == true) // disable arduino OTA
         {
-            if (enableArduinoOTA == true) //disable arduino OTA
-            {
-                delete ArduinoOTA;
-                enableArduinoOTA = false;
-                Serial.println(F("Arduino OTA disabled."));
-            }
-            else //not enabled
-            {
-                Serial.println(F("Arduino OTA already disabled."));
-            }
-        } //(value == false) disable arduino OTA
-    }     //WiFi connected and mDNS running:
-    //globalPrintMemory("setArduinoOTA: ");
+            delete ArduinoOTA;
+            enableArduinoOTA = false;
+            Serial.println(F("Arduino OTA disabled."));
+        }
+        else // not enabled
+        {
+            Serial.println(F("Arduino OTA already disabled."));
+        }
+    } //(value == false) disable arduino OTA
+
+    // globalPrintMemory("setArduinoOTA: ");
 }
 void FILAMENT_ESTIMATOR::setAutoHomepage(bool value)
 {
-    if (value == true) //turn on auto homepage
+    if (value == true) // turn on auto homepage
     {
         setting.optionsAutoHomepage = true;
         returnToHomepageTimer = millis();
         Serial.println(F("Auto homepage enabled."));
     }
-    else //turn off auto homepage
+    else // turn off auto homepage
     {
         setting.optionsAutoHomepage = false;
         Serial.println(F("Auto homepage disabled."));
@@ -1613,8 +1716,8 @@ void FILAMENT_ESTIMATOR::checkConnectionStatus()
     if (WiFi.status() == WL_CONNECTED)
     {
         connectionStatus = CONNECTION_STATUS_WIFI_AND_INTERNET;
-        //Todo: check internet connection
-        //checkGithubTag();
+        // Todo: check internet connection
+        // checkGithubTag();
         return;
     }
     else
@@ -1682,6 +1785,10 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case MENU_NOTIFICATION:
                 setPage(PAGE_NOTIFICATION);
                 break;
+            case MENU_ENTER_HOTSPOT_MODE:
+                enterHotspotMode();
+                setPage(PAGE_ENTER_HOTSPOT_MODE);
+                break;
             case MENU_FIRMWARE_UPDATE:
                 setPage(PAGE_FIRMWARE_UPDATE);
                 break;
@@ -1702,7 +1809,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             else if (tareSelection == TARE_CANCEL)
             {
-                //Reset the selection to ok, for next entry
+                // Reset the selection to ok, for next entry
                 tareSelection = TARE_OK;
                 setPage(PAGE_MENU);
             }
@@ -1744,24 +1851,24 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case CALIBRATE_OK:
                 calibrateEditDigitMode = false;
-                //Reset the selection to the fourth digit, for next entry
+                // Reset the selection to the fourth digit, for next entry
                 calibrateSelection = CALIBRATE_4_DIGIT;
                 if (getCalibrationWeight() != setting.calibrationWeight)
                 {
                     setting.calibrationWeight = getCalibrationWeight();
-                    saveToEEPROM(); //store the newly selected calibration weight
+                    saveToEEPROM(); // store the newly selected calibration weight
                 }
                 calibrate();
                 setPage(PAGE_CALIBRATE_CONFIRM);
                 break;
             case CALIBRATE_CANCEL:
                 calibrateEditDigitMode = false;
-                //Reset the selection to the fourth digit, for next entry
+                // Reset the selection to the fourth digit, for next entry
                 calibrateSelection = CALIBRATE_4_DIGIT;
                 if (getCalibrationWeight() != setting.calibrationWeight)
                 {
                     setting.calibrationWeight = getCalibrationWeight();
-                    saveToEEPROM(); //store the newly selected calibration weight
+                    saveToEEPROM(); // store the newly selected calibration weight
                 }
                 setPage(PAGE_MENU);
                 break;
@@ -1790,7 +1897,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case SPOOL_HOLDER_OK:
                 spoolHolderEditDigitMode = false;
-                //Reset the selection to the third digit, for next entry
+                // Reset the selection to the third digit, for next entry
                 spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
                 setting.spoolHolderWeight = getSpoolHolderWeight();
                 saveToEEPROM();
@@ -1798,11 +1905,11 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case SPOOL_HOLDER_CANCEL:
                 spoolHolderEditDigitMode = false;
-                //Reset the selection to the third digit, for next entry
+                // Reset the selection to the third digit, for next entry
                 spoolHolderSelection = SPOOL_HOLDER_3_DIGIT;
                 setPage(PAGE_MENU);
                 break;
-            default: //other than above, which means loading preset slot value into current weight
+            default: // other than above, which means loading preset slot value into current weight
             {
                 uint8_t slotIndex = spoolHolderSelection - SPOOL_HOLDER_SLOT_1;
                 spoolHolder3Digit = (spoolHolderSlotWeight[slotIndex] / 100U) % 10;
@@ -1836,13 +1943,13 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case SET_SPOODER_ID_OK:
                 setSpooderIDEditMode = false;
-                //Reset the selection to the letter digit, for next entry
+                // Reset the selection to the letter digit, for next entry
                 setSpooderIDSelection = SET_SPOODER_ID_LETTER;
                 if (spooderIDLetter >= 1 && spooderIDLetter <= 26)
                 {
                     if (spooderIDNumber >= 0 && spooderIDNumber <= 99)
                     {
-                        //valid new spooder ID
+                        // valid new spooder ID
                         setting.spooderIDLetter = spooderIDLetter;
                         setting.spooderIDNumber = spooderIDNumber;
                         setting.spooderIDSetStatus = SPOODER_ID_USER_SET;
@@ -1851,27 +1958,27 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                         hostname = "spooder" + String((char)(spooderIDLetter + 64)) + String(spooderIDNumber);
                         Serial.print("Reset hostname to: ");
                         Serial.println(hostname);
-                        setMDNS(setting.optionsMDNS); //change hostname if mDNS is enabled
+                        setMDNS(setting.optionsMDNS); // change hostname if mDNS is enabled
                     }
                 }
 
-                //saveToEEPROM();
+                // saveToEEPROM();
 
                 setPage(PAGE_MENU);
                 break;
             case SET_SPOODER_ID_CANCEL:
                 spoolHolderEditDigitMode = false;
-                //Reset the selection to the letter digit, for next entry
+                // Reset the selection to the letter digit, for next entry
                 setSpooderIDSelection = SET_SPOODER_ID_LETTER;
                 if (validSpooderID == false)
                 {
-                    //reset to invalid value for next entry
+                    // reset to invalid value for next entry
                     spooderIDLetter = 0;
                     spooderIDNumber = 0;
                 }
                 setPage(PAGE_MENU);
                 break;
-            default: //other than above, which means loading preset slot value into current weight
+            default: // other than above, which means loading preset slot value into current weight
             {
                 uint8_t slotIndex = spoolHolderSelection - SPOOL_HOLDER_SLOT_1;
                 spoolHolder3Digit = (spoolHolderSlotWeight[slotIndex] / 100U) % 10;
@@ -1893,7 +2000,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 saveToEEPROM();
                 break;
             case CALIBRATE_SAVE_CANCEL:
-                //Reset the selection to ok
+                // Reset the selection to ok
                 calibrateSaveSelection = CALIBRATE_SAVE_OK;
                 break;
             }
@@ -1922,7 +2029,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case CALIBRATE_OK:
                 lowFilamentEditDigitMode = false;
-                //Reset the selection to the second digit, for next entry
+                // Reset the selection to the second digit, for next entry
                 lowFilamentSelection = LOW_FILAMENT_2_DIGIT;
                 setting.lowFilamentThreshold = getLowFilamentThreshold();
                 saveToEEPROM();
@@ -1930,9 +2037,9 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 break;
             case CALIBRATE_CANCEL:
                 lowFilamentEditDigitMode = false;
-                //Reset the selection to the second digit, for next entry
+                // Reset the selection to the second digit, for next entry
                 lowFilamentSelection = LOW_FILAMENT_2_DIGIT;
-                //Revert to original value
+                // Revert to original value
                 lowFilament4Digit = (setting.lowFilamentThreshold / 1000U) % 10;
                 lowFilament3Digit = (setting.lowFilamentThreshold / 100U) % 10;
                 lowFilament2Digit = (setting.lowFilamentThreshold / 10U) % 10;
@@ -1951,7 +2058,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case NOTIFICATION_MENU_FALL_OFF_RACK:
             case NOTIFICATION_MENU_FALL_OFF_BEARING:
             case NOTIFICATION_MENU_TANGLED:
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setNotificationSetting(notificationMenuSelection, !getNotificationSetting(notificationMenuSelection));
                 displayPage(PAGE_NOTIFICATION);
                 break;
@@ -1961,7 +2068,14 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 setPage(PAGE_MENU);
                 break;
             }
-            break; //case PAGE_NOTIFICATION:
+            break; // case PAGE_NOTIFICATION:
+        }
+        case PAGE_ENTER_HOTSPOT_MODE:
+        {
+            exitHotspotMode();
+            setPage(PAGE_MENU);
+
+            break; // case PAGE_ENTER_HOTSPOT_MODE:
         }
         case PAGE_FIRMWARE_UPDATE:
         {
@@ -1987,7 +2101,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 saveToEEPROM();
                 if (setting.autoGithubUpdate == true)
                 {
-                    //reset nextCheckCountdown whenever autoGithubUpdate set to on
+                    // reset nextCheckCountdown whenever autoGithubUpdate set to on
                     setNextCheckCountdown();
                 }
                 displayPage(currentPage);
@@ -2003,8 +2117,8 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
 
             default:
                 break;
-            }      //switch (notificationMenuSelection)
-            break; //case PAGE_FIRMWARE_UPDATE:
+            }      // switch (notificationMenuSelection)
+            break; // case PAGE_FIRMWARE_UPDATE:
         }
         case PAGE_OPTIONS:
         {
@@ -2012,63 +2126,63 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             {
             case OPTIONS_MENU_WIFI:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(OPTIONS_MENU_WIFI, !getOptionsSetting(OPTIONS_MENU_WIFI));
                 displayPage(PAGE_OPTIONS);
-                setWifi(getOptionsSetting(OPTIONS_MENU_WIFI)); //turn WiFi on or off
+                setWifi(getOptionsSetting(OPTIONS_MENU_WIFI)); // turn WiFi on or off
                 break;
             }
             case OPTIONS_MENU_MDNS:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
-                setMDNS(getOptionsSetting(OPTIONS_MENU_MDNS)); //turn mDNS on or off
+                setMDNS(getOptionsSetting(OPTIONS_MENU_MDNS)); // turn mDNS on or off
                 break;
             }
             case OPTIONS_MENU_BLYNK:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
-                setBlynk(getOptionsSetting(OPTIONS_MENU_BLYNK)); //turn blynk on or off
+                setBlynk(getOptionsSetting(OPTIONS_MENU_BLYNK)); // turn blynk on or off
                 break;
             }
             case OPTIONS_MENU_WEB_SERVER:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
-                setWebServer(getOptionsSetting(OPTIONS_MENU_WEB_SERVER)); //turn web server on or off
+                setWebServer(getOptionsSetting(OPTIONS_MENU_WEB_SERVER)); // turn web server on or off
                 break;
             }
             case OPTIONS_MENU_SPOODER_CLIENT:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
-                setSpooderClient(getOptionsSetting(OPTIONS_MENU_SPOODER_CLIENT)); //turn Spooder Client on or off
+                setSpooderClient(getOptionsSetting(OPTIONS_MENU_SPOODER_CLIENT)); // turn Spooder Client on or off
                 break;
             }
             case OPTIONS_MENU_SPOODER_SERVER:
             {
-                //Toogle the selected settings
+                // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
                 displayPage(PAGE_OPTIONS);
-                setSpooderServer(getOptionsSetting(OPTIONS_MENU_SPOODER_SERVER)); //turn Spooder Server on or off
+                setSpooderServer(getOptionsSetting(OPTIONS_MENU_SPOODER_SERVER)); // turn Spooder Server on or off
                 break;
             }
             case OPTIONS_MENU_ARDUINO_OTA:
-            { //Toogle the selected settings
+            { // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
-                setArduinoOTA(getOptionsSetting(OPTIONS_MENU_ARDUINO_OTA)); //turn arduino OTA on or off
+                setArduinoOTA(getOptionsSetting(OPTIONS_MENU_ARDUINO_OTA)); // turn arduino OTA on or off
                 displayPage(PAGE_OPTIONS);
                 break;
             }
             case OPTIONS_MENU_AUTO_HOMEPAGE:
-            { //Toogle the selected settings
+            { // Toogle the selected settings
                 setOptionsSetting(optionsMenuSelection, !getOptionsSetting(optionsMenuSelection));
-                setAutoHomepage(getOptionsSetting(OPTIONS_MENU_AUTO_HOMEPAGE)); //turn arduino OTA on or off
+                setAutoHomepage(getOptionsSetting(OPTIONS_MENU_AUTO_HOMEPAGE)); // turn arduino OTA on or off
                 displayPage(PAGE_OPTIONS);
                 break;
             }
@@ -2151,11 +2265,11 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
                 listMDNSDynamicQueryAnswer();
                 break;
             case DEBUG_UPDATE_SERVICE_TXT:
-                //drawOverlay("Update", "Srvc Txt", 1000);
+                // drawOverlay("Update", "Srvc Txt", 1000);
                 updateServiceTxt();
                 break;
             case DEBUG_PRINT_SPOODERS_DATASET:
-                //drawOverlay("Print", "Spooders", 1000);
+                // drawOverlay("Print", "Spooders", 1000);
                 printSpoodersDataset();
                 break;
             case DEBUG_CHECK_DATA_FOLDER:
@@ -2170,14 +2284,14 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             case DEBUG_MANAGE_LOCAL_FILES:
                 manageLocalFileInfo();
                 break;
-            case DEBUG_RESERVED_1:
-
+            case DEBUG_TOOGLE_VERBOSE_DEBUG:
+                toogleVerboseDebug();
                 break;
-            case DEBUG_RESERVED_2:
-
+            case DEBUG_CONNECT_SPOODER_SERVER:
+                connectSpooderServer(0);
                 break;
             case DEBUG_LIST_SPOODER_SERVICE:
-                //listSpooderService();
+                // listSpooderService();
                 break;
             case DEBUG_RETURN:
                 debugMenuSelection = DEBUG_LOAD_TO_SETTING;
@@ -2187,7 +2301,7 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
             }
             break;
         }
-        break; //case SINGLE_CLICK:
+        break; // case SINGLE_CLICK:
     case DOUBLE_CLICK:
     {
 
@@ -2203,13 +2317,13 @@ void FILAMENT_ESTIMATOR::buttonHandler(Button2 &btn)
     {
         break;
     }
-    } //switch (btn.getClickType())
+    } // switch (btn.getClickType())
     returnToHomepageTimer = millis();
 }
 void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
 {
     uint8_t direction = rotary.getDirection();
-    //Serial.println(direction);
+    // Serial.println(direction);
     switch (direction)
     {
     case RE_LEFT:
@@ -2517,9 +2631,9 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             break;
         }
 
-        } //switch (currentPage)
+        } // switch (currentPage)
         break;
-    } //case RE_LEFT:
+    } // case RE_LEFT:
     case RE_RIGHT:
     {
         switch (currentPage)
@@ -2680,7 +2794,7 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
                                 spoolHolderSlotStartIndex++;
                             }
                         }
-                        else //menu was rotated before, return to ok after pressing,then rotate right
+                        else // menu was rotated before, return to ok after pressing,then rotate right
                         {
                             spoolHolderSelection = spoolHolderSlotStartIndex;
                         }
@@ -2837,18 +2951,18 @@ void FILAMENT_ESTIMATOR::rotaryHandler(ESPRotary &rty)
             break;
         }
 
-        } //switch (currentPage)
+        } // switch (currentPage)
 
         break;
-    } //case RE_RIGHT:
+    } // case RE_RIGHT:
 
-    } //switch (direction)
+    } // switch (direction)
     returnToHomepageTimer = millis();
 }
 bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 {
-    //Serial.print(F("Set page:"));
-    //Serial.println(page);
+    // Serial.print(F("Set page:"));
+    // Serial.println(page);
     previousPage = currentPage;
     currentPage = page;
     displayPage(currentPage);
@@ -2858,11 +2972,11 @@ bool FILAMENT_ESTIMATOR::setPage(uint8_t page)
 void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 {
 
-    //if (page != PAGE_HOME)
+    // if (page != PAGE_HOME)
     //{
-    //Serial.print(F("Display page: "));
-    //Serial.println(page);
-    //}
+    // Serial.print(F("Display page: "));
+    // Serial.println(page);
+    // }
 
     switch (page)
     {
@@ -2877,7 +2991,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawRect(0, 12, 128, 1);
 
         drawRightIndicator(0);
-        //Draw display type symbol and weight
+        // Draw display type symbol and weight
 
         switch (displayType)
         {
@@ -2887,7 +3001,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             display.setColor(WHITE);
             display.fillRect(6, 22, 4, 26);
             display.fillRect(27, 22, 4, 26);
-            //display.fillRect(11, 28, 15, 13);
+            // display.fillRect(11, 28, 15, 13);
             display.fillRect(12, 26, 3, 17);
             display.fillRect(17, 26, 3, 17);
             display.fillRect(22, 26, 3, 32);
@@ -2902,7 +3016,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             {
                 int16_t displayWeight = totalWeight;
                 display.drawString(90, 20, String(displayWeight));
-                //Draw unit
+                // Draw unit
                 display.setFont(ArialMT_Plain_10);
                 display.drawString(100, 32, "g");
             }
@@ -2933,7 +3047,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
                 if (abs(filamentWeight) < 9999)
                 {
                     display.drawString(90, 20, String(filamentWeight, 0));
-                    //Draw unit
+                    // Draw unit
                     display.setFont(ArialMT_Plain_10);
                     display.drawString(100, 32, "g");
                 }
@@ -2942,14 +3056,14 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
                 if (abs(filamentWeight) < 9999)
                 {
                     display.drawString(90, 20, String(filamentWeight, 0));
-                    //Draw unit
+                    // Draw unit
                     display.setFont(ArialMT_Plain_10);
                     display.drawString(100, 32, "g");
                 }
                 break;
             default:
                 break;
-            } //switch (printingStatus)
+            } // switch (printingStatus)
 
             break;
         case DISPLAY_TYPE_SPOOL_HOLDER:
@@ -2962,7 +3076,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             if (abs(setting.spoolHolderWeight) < 1000)
             {
                 display.drawString(90, 20, String(setting.spoolHolderWeight));
-                //Draw unit
+                // Draw unit
                 display.setFont(ArialMT_Plain_10);
                 display.drawString(100, 32, "g");
             }
@@ -2970,7 +3084,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
             break;
         }
 
-        //drawSymbols();
+        // drawSymbols();
 
         drawDisplay();
     }
@@ -2989,11 +3103,11 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(6, 32, "CAL Value: " + String(setting.calValue));
         if (enableWifi == true)
         {
-            display.drawString(6, 42, "Wifi: " + WiFi.SSID());
+            display.drawString(6, 42, "Wifi: " + String(wifi_ssid));
             display.drawString(6, 52, "IP:" + WiFi.localIP().toString());
         }
 
-        //drawSymbols();
+        // drawSymbols();
         drawRightIndicator(1);
         drawDisplay();
     }
@@ -3017,7 +3131,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
 
         drawLeftIndicator(menuIndex - menuItemStartIndex);
 
-        //drawSymbols();
+        // drawSymbols();
 
         drawDisplay();
 
@@ -3152,7 +3266,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         break;
     }
     case PAGE_SPOOL_HOLDER_WEIGHT:
-    { //need this because variable is defined in case
+    { // need this because variable is defined in case
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -3218,7 +3332,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(96, 14, "Ok");
         display.drawString(96, 24, "Cancel");
 
-        //display slot menu
+        // display slot menu
         if (spoolHolderSlotSize == 0)
         {
             return;
@@ -3239,8 +3353,8 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         if (spoolHolderSelection > SPOOL_HOLDER_CANCEL)
         {
             uint8_t triangleIndex = spoolHolderSelection - spoolHolderSlotStartIndex;
-            //Serial.print("triangleIndex = ");
-            //Serial.println(triangleIndex);
+            // Serial.print("triangleIndex = ");
+            // Serial.println(triangleIndex);
             drawTriangle(nameX - 6, nameY + 6 + (triangleIndex * 10));
         }
 
@@ -3270,7 +3384,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         }
         else
         {
-            displayLetter = spooderIDLetter + 64; //Starting with A
+            displayLetter = spooderIDLetter + 64; // Starting with A
         }
 
         switch (setSpooderIDSelection)
@@ -3470,14 +3584,14 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.drawString(6, 42, updateMenuTitle[updateMenuItemStartIndex + 1]);
         display.drawString(6, 52, updateMenuTitle[updateMenuItemStartIndex + 2]);
 
-        //display auto update setting
+        // display auto update setting
         if (updateMenuItemStartIndex >= 0 && updateMenuItemStartIndex <= 2)
         {
             uint8_t autoUpdateRow = 2 - updateMenuItemStartIndex;
             display.drawString(100, 32 + autoUpdateRow * 10, setting.autoGithubUpdate == true ? "On" : "    Off");
         }
 
-        //display next check countdown
+        // display next check countdown
         if (updateMenuItemStartIndex >= 1 && updateMenuItemStartIndex <= 3)
         {
             uint8_t autoUpdateRow = 3 - updateMenuItemStartIndex;
@@ -3528,6 +3642,30 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         drawLeftIndicator(optionsMenuSelection - optionsMenuItemStartIndex);
         drawDisplay();
 
+        break;
+    }
+    case PAGE_ENTER_HOTSPOT_MODE:
+    {
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(display.getWidth() / 2, 0, F("Hotspot Setup"));
+        display.drawRect(0, 12, 128, 1);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(0, 12, F("Connect to:"));
+        display.setFont(ArialMT_Plain_16);
+        display.drawString(8, 22, F("Spooder_Setup"));
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(0, 38, "Browse:");
+        display.setFont(ArialMT_Plain_16);
+        display.drawString(8, 48, "192.168.4.1 ");
+
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(108, 52, F("Exit"));
+        drawTriangle(102, 58);
+        drawDisplay();
         break;
     }
     case PAGE_DEBUG:
@@ -3610,16 +3748,16 @@ void FILAMENT_ESTIMATOR::drawTriangle(uint8_t x, uint8_t y)
 }
 void FILAMENT_ESTIMATOR::drawSymbols()
 {
-    //Draw WiFi and Blynk symbols
+    // Draw WiFi and Blynk symbols
     uint8_t x = 117;
     uint8_t y = 0;
     switch (symbolType)
     {
-    case SYMBOL_NONE: //wifi off
+    case SYMBOL_NONE: // wifi off
         break;
-    case SYMBOL_NO_WIFI: //wifi on but not connected
+    case SYMBOL_NO_WIFI: // wifi on but not connected
         break;
-    case SYMBOL_WIFI_AND_INTERNET: //wifi and internet connected
+    case SYMBOL_WIFI_AND_INTERNET: // wifi and internet connected
         display.drawHorizontalLine(x + 2, y + 1, 6);
         display.drawHorizontalLine(x + 1, y + 2, 8);
         display.drawHorizontalLine(x, y + 3, 3);
@@ -3635,7 +3773,7 @@ void FILAMENT_ESTIMATOR::drawSymbols()
         display.drawHorizontalLine(x + 4, y + 8, 2);
         display.drawHorizontalLine(x + 4, y + 9, 2);
         break;
-    case SYMBOL_WIFI_NO_INTERNET_1: //wifi but no internet flashing icon 1
+    case SYMBOL_WIFI_NO_INTERNET_1: // wifi but no internet flashing icon 1
         display.drawVerticalLine(x, y + 3, 3);
         display.drawVerticalLine(x + 9, y + 3, 3);
         display.drawVerticalLine(x + 1, y + 2, 3);
@@ -3649,7 +3787,7 @@ void FILAMENT_ESTIMATOR::drawSymbols()
         display.drawHorizontalLine(x + 4, y + 9, 2);
 
         break;
-    case SYMBOL_WIFI_NO_INTERNET_2: //wifi but no internet flashing icon 2
+    case SYMBOL_WIFI_NO_INTERNET_2: // wifi but no internet flashing icon 2
         display.drawVerticalLine(x, y + 3, 3);
         display.drawVerticalLine(x + 9, y + 3, 3);
         display.drawVerticalLine(x + 1, y + 2, 3);
@@ -3661,7 +3799,7 @@ void FILAMENT_ESTIMATOR::drawSymbols()
     default:
         break;
     }
-    //Blynk status
+    // Blynk status
     if (Blynk.connected() == true)
     {
         display.setFont(ArialMT_Plain_10);
@@ -3682,7 +3820,7 @@ void FILAMENT_ESTIMATOR::tare()
     drawOverlay("Tare", "", 1000);
     loadcell.tare();
     drawOverlay("Offset", "Saved", 1000);
-    //testing purpose
+    // testing purpose
     setting.tareOffset = loadcell.getTareOffset();
     Serial.print(F("Tare offset: "));
     Serial.print(setting.tareOffset);
@@ -3691,11 +3829,11 @@ void FILAMENT_ESTIMATOR::tare()
     printingStatus = STATUS_IDLE;
     printingStatusString = "STATUS_IDLE";
     Serial.println(F("Status changed to STATUS_IDLE after tare."));
-    purgeCounter = 3; //purge array after few samples
+    purgeCounter = 3; // purge array after few samples
 }
 void FILAMENT_ESTIMATOR::calibrate()
 {
-    //Draw the overlay
+    // Draw the overlay
     display.setColor(BLACK);
     display.fillRect(16 - 8, 12 - 4, 96 + 18, 40 + 8);
     display.setColor(WHITE);
@@ -3704,12 +3842,12 @@ void FILAMENT_ESTIMATOR::calibrate()
     display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
     display.drawString(64, 32, "Calibrating...");
     drawDisplay();
-    //refresh the dataset to be sure that the known mass is measured correct
+    // refresh the dataset to be sure that the known mass is measured correct
     loadcell.refreshDataSet();
     setting.calibrationWeight = getCalibrationWeight();
     Serial.print("Calibration weight = ");
     Serial.println(setting.calibrationWeight);
-    //get the new calibration value
+    // get the new calibration value
     newCalibrationValue = loadcell.getNewCalibration(setting.calibrationWeight);
     Serial.print("New calibration value = ");
     Serial.println(newCalibrationValue);
@@ -3771,7 +3909,7 @@ void FILAMENT_ESTIMATOR::updateOverlay()
             display.drawString(64, 48, overlayMsgLine2);
         }
 
-        //display.drawString(64, 52, msg);
+        // display.drawString(64, 52, msg);
     }
 }
 void FILAMENT_ESTIMATOR::drawDisplay()
@@ -3918,8 +4056,8 @@ void FILAMENT_ESTIMATOR::loadToSetting()
         break;
     }
 
-    //handles newly added calibrationWeight to settings
-    if (setting.calibrationWeightIsValid != 253) //arbitury value
+    // handles newly added calibrationWeight to settings
+    if (setting.calibrationWeightIsValid != 253) // arbitury value
     {
         setting.calibrationWeightIsValid = 253;
         setting.calibrationWeight = DEFAULT_CALIBRATION_WEIGHT;
@@ -3934,7 +4072,7 @@ void FILAMENT_ESTIMATOR::saveToEEPROM()
 void FILAMENT_ESTIMATOR::dumpSetting()
 {
     Serial.println(F("Dump setting:"));
-    //Starting from v0.3.0
+    // Starting from v0.3.0
     Serial.print(F("  - Firmware version: "));
     Serial.print(setting.version.major);
     Serial.print(F("."));
@@ -3988,6 +4126,8 @@ void FILAMENT_ESTIMATOR::dumpSetting()
     Serial.println(setting.optionsWebServer);
     Serial.print(F("  - optionsSpooderClient: "));
     Serial.println(setting.optionsSpooderClient);
+    Serial.print(F("  - optionsSpooderServer: "));
+    Serial.println(setting.optionsSpooderServer);
     Serial.print(F("  - optionsArduinoOTA: "));
     Serial.println(setting.optionsArduinoOTA);
     Serial.print(F("  - optionsAutoHomepage: "));
@@ -4037,11 +4177,17 @@ void FILAMENT_ESTIMATOR::eraseEEPROM()
     }
     EEPROM.commit();
 }
+void FILAMENT_ESTIMATOR::toogleVerboseDebug()
+{
+    VERBOSE_DEBUG_PRINT = !VERBOSE_DEBUG_PRINT;
+    Serial.print(F("Verbose debug print is now "));
+    Serial.println(VERBOSE_DEBUG_PRINT ? "on." : "off.");
+}
 uint32_t FILAMENT_ESTIMATOR::versionToNumber(VERSION_STRUCT v)
 {
-    //a simple conversion
-    //v1.2.3 will convert to something like 10203
-    //So that the max number for each item that works will be 99
+    // a simple conversion
+    // v1.2.3 will convert to something like 10203
+    // So that the max number for each item that works will be 99
     uint32_t number = 0;
     number += v.major * 10000;
     number += v.minor * 100;
@@ -4080,11 +4226,11 @@ void FILAMENT_ESTIMATOR::_listDir(const char *dirname, uint8_t level)
                     Serial.print(F("|"));
                 }
             }
-            else //i=0
+            else // i=0
             {
-                //Serial.print("--");
+                // Serial.print("--");
             }
-            //Serial.print("--");
+            // Serial.print("--");
         }
         Serial.print("--");
         if (dir.isFile())
@@ -4094,7 +4240,7 @@ void FILAMENT_ESTIMATOR::_listDir(const char *dirname, uint8_t level)
             Serial.print(F("  "));
             Serial.println(dir.fileSize());
         }
-        else //isDirectory()
+        else // isDirectory()
         {
             Serial.print("<");
             Serial.print(dir.fileName());
@@ -4181,36 +4327,36 @@ void FILAMENT_ESTIMATOR::displayMonoBitmap(const char *filename)
     bool normalDir;
     if (f.read() == 0 && f.read() == 0 && f.read() == 0)
     {
-        //if the color 0 is (0,0,0) black,
-        //bits of 0 is black
+        // if the color 0 is (0,0,0) black,
+        // bits of 0 is black
         normalDir = true;
     }
     else
     {
         normalDir = false;
     }
-    //dump the file for debugging
-    //f.seek(0);
-    // while (f.available())
-    // {
-    //     char c = f.read();
-    //     if (c < 10)
-    //         Serial.print("0");
-    //     Serial.print(c, HEX);
-    //     Serial.print("  ");
-    // }
+    // dump the file for debugging
+    // f.seek(0);
+    //  while (f.available())
+    //  {
+    //      char c = f.read();
+    //      if (c < 10)
+    //          Serial.print("0");
+    //      Serial.print(c, HEX);
+    //      Serial.print("  ");
+    //  }
     uint8_t buffer[1024];
     f.seek(bmp.offset);
     for (uint16_t i = 0; i < 1024; i++)
     {
         if (normalDir == true)
         {
-            //bits of 0 means black in the bmp
+            // bits of 0 means black in the bmp
             buffer[1023 - i] = f.read();
         }
         else
         {
-            //bits of 0 means white in the bmp, reading is inverted
+            // bits of 0 means white in the bmp, reading is inverted
             buffer[1023 - i] = ~f.read();
         }
     }
@@ -4243,7 +4389,7 @@ void FILAMENT_ESTIMATOR::loadConfig()
         return;
     }
 
-    //Use local json buffer to free up memory after loading
+    // Use local json buffer to free up memory after loading
     DynamicJsonDocument jsonDoc(JSON_DOC_BUFFER_SIZE);
 
     deserializeJson(jsonDoc, configFile);
@@ -4259,7 +4405,7 @@ void FILAMENT_ESTIMATOR::loadConfig()
     for (JsonObject elem : jsonDoc["spool_holder"].as<JsonArray>())
     {
         strcpy(spoolHolderSlotName[index], elem["name"]);
-        //spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
+        // spoolHolderSlotName[index] = elem["name"];     // "esun black", "your_holder_name_here", "your_other_holder", ...
         spoolHolderSlotWeight[index] = elem["weight"]; // 180, 150, 250, 250, 250
         index++;
     }
@@ -4269,7 +4415,7 @@ void FILAMENT_ESTIMATOR::loadConfig()
     Serial.print(config_version);
     Serial.println(F(" loaded."));
 
-    //handles config file version update from 0.3.0 to 0.7.0
+    // handles config file version update from 0.3.0 to 0.7.0
     /*
     if (jsonDoc["config_version"] == "0.3.0")
     {
@@ -4308,12 +4454,53 @@ void FILAMENT_ESTIMATOR::dumpConfig()
         return;
     }
 
-    //Use local json buffer to free up memory after loading
+    // Use local json buffer to free up memory after loading
     DynamicJsonDocument jsonDoc(JSON_DOC_BUFFER_SIZE);
 
     deserializeJson(jsonDoc, configFile);
-    serializeJsonPretty(jsonDoc, Serial); //output to Serial
+    serializeJsonPretty(jsonDoc, Serial); // output to Serial
     Serial.println();
+}
+void FILAMENT_ESTIMATOR::saveConfig()
+{
+    File configFile = LittleFS.open("/config.json", "r");
+    if (!configFile)
+    {
+        Serial.println(F("Failed to open config file."));
+        return;
+    }
+    configSize = configFile.size();
+    if (configSize > JSON_DOC_BUFFER_SIZE)
+    {
+        Serial.println(F("Config file size is too large"));
+        return;
+    }
+
+    // Use local json buffer to free up memory after loading
+    DynamicJsonDocument jsonDoc(JSON_DOC_BUFFER_SIZE);
+
+    // Deserialize the JSON document
+    deserializeJson(jsonDoc, configFile);
+    configFile.close();
+
+    // Set the values in the document
+    jsonDoc["wifi_ssid"] = wifi_ssid;
+    jsonDoc["wifi_password"] = wifi_password;
+    jsonDoc["blynk_auth"] = blynk_auth;
+
+    LittleFS.remove("/config.json"); // delete the file
+
+    // Serialize JSON to file
+    configFile = LittleFS.open("/config.json", "w");
+    if (serializeJsonPretty(jsonDoc, configFile) == 0)
+    {
+        Serial.println(F("Failed to write to file"));
+    }
+    else
+    {
+        Serial.println(F("Config file updated."));
+    }
+    configFile.close();
 }
 void FILAMENT_ESTIMATOR::replyOK()
 {
@@ -4682,42 +4869,69 @@ void FILAMENT_ESTIMATOR::handleFileUpload()
 }
 void FILAMENT_ESTIMATOR::handleNotFound()
 {
-    if (!fsOK)
+    if (isHotspotMode == true)
     {
-        return replyServerError(FPSTR(FS_INIT_ERROR));
-    }
+        Serial.println(F("Client connected, sending setup page."));
 
-    String uri = ESP8266WebServer::urlDecode(webServer->uri()); // required to read paths with blanks
+        // Send captive portal web page in chunks
+        webServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
+        webServer->send(200, "text/html", FPSTR(captivePortalResponseHTML1));
+        webServer->sendContent(FPSTR(captivePortalResponseHTML2));
+        if (wifi_ssid[0] != '\0') // prevent null value ending the transmission
+            webServer->sendContent(wifi_ssid);
+        webServer->sendContent(FPSTR(captivePortalResponseHTML3));
+        webServer->sendContent(FPSTR(captivePortalResponseHTML4));
+        if (wifi_password[0] != '\0') // prevent null value ending the transmission
+            webServer->sendContent(wifi_password);
+        webServer->sendContent(FPSTR(captivePortalResponseHTML5));
+        webServer->sendContent(FPSTR(captivePortalResponseHTML6));
+        if (blynk_auth[0] != '\0') // prevent null value ending the transmission
+            webServer->sendContent(blynk_auth);
+        webServer->sendContent(FPSTR(captivePortalResponseHTML7));
+        webServer->sendContent("");
 
-    if (handleFileRead(uri))
-    {
         return;
     }
-
-    // Dump debug data
-    String message;
-    message.reserve(100);
-    message = F("Error: File not found\n\nURI: ");
-    message += uri;
-    message += F("\nMethod: ");
-    message += (webServer->method() == HTTP_GET) ? "GET" : "POST";
-    message += F("\nArguments: ");
-    message += webServer->args();
-    message += '\n';
-    for (uint8_t i = 0; i < webServer->args(); i++)
+    else
     {
-        message += F(" NAME:");
-        message += webServer->argName(i);
-        message += F("\n VALUE:");
-        message += webServer->arg(i);
-        message += '\n';
-    }
-    message += "path=";
-    message += webServer->arg("path");
-    message += '\n';
-    Serial.print(message);
 
-    return replyNotFound(message);
+        if (!fsOK)
+        {
+            return replyServerError(FPSTR(FS_INIT_ERROR));
+        }
+
+        String uri = ESP8266WebServer::urlDecode(webServer->uri()); // required to read paths with blanks
+
+        if (handleFileRead(uri))
+        {
+            return;
+        }
+
+        // Dump debug data
+        String message;
+        message.reserve(100);
+        message = F("Error: File not found\n\nURI: ");
+        message += uri;
+        message += F("\nMethod: ");
+        message += (webServer->method() == HTTP_GET) ? "GET" : "POST";
+        message += F("\nArguments: ");
+        message += webServer->args();
+        message += '\n';
+        for (uint8_t i = 0; i < webServer->args(); i++)
+        {
+            message += F(" NAME:");
+            message += webServer->argName(i);
+            message += F("\n VALUE:");
+            message += webServer->arg(i);
+            message += '\n';
+        }
+        message += "path=";
+        message += webServer->arg("path");
+        message += '\n';
+        Serial.print(message);
+
+        return replyNotFound(message);
+    }
 }
 void FILAMENT_ESTIMATOR::handleGetEdit()
 {
@@ -4756,7 +4970,7 @@ void FILAMENT_ESTIMATOR::stopLogging()
 }
 void FILAMENT_ESTIMATOR::updateLogging()
 {
-    //logs every second
+    // logs every second
     now = time(nullptr);
     if (now != previous)
     {
@@ -4792,7 +5006,7 @@ void FILAMENT_ESTIMATOR::startEmulation()
     EMULATION_PERIOD = 100;
     DETECTION_PERIOD = 100;
     loggerCounter = 0;
-    detectionTimer = millis(); //reset timer, to fill the weight first, debug purpose
+    detectionTimer = millis(); // reset timer, to fill the weight first, debug purpose
 }
 void FILAMENT_ESTIMATOR::stopEmulation()
 {
@@ -4810,9 +5024,9 @@ void FILAMENT_ESTIMATOR::updateEmulation()
 {
     if (millis() - emulationTimer < EMULATION_PERIOD)
         return;
-    if (emulatedLogFile.available() > 5) //normally a valid data set has more than 4 bytes
+    if (emulatedLogFile.available() > 5) // normally a valid data set has more than 4 bytes
     {
-        //Reading a set of data
+        // Reading a set of data
         emulatedLogFile.parseInt();
         emulatedLogFile.read();
         emulatedWeight = emulatedLogFile.parseFloat();
@@ -4837,7 +5051,7 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     pushWeight(totalWeight);
     pushStddev(stddev3);
-    //calculate how many samples has the stddev3>1 condition, in the last 30 seconds
+    // calculate how many samples has the stddev3>1 condition, in the last 30 seconds
     uint8_t stddev3Count = getStddevCount(1.0);
 
     time_t now = time(nullptr);
@@ -4897,7 +5111,7 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     if (isLogging == true)
     {
-        //logs every second
+        // logs every second
 
         String record;
         record += (String)timeStamp;
@@ -4917,8 +5131,8 @@ void FILAMENT_ESTIMATOR::updateDetection()
         record += (String)printingStatusString;
         if (logFile.println(record))
         {
-            //Serial.print("Logging: ");
-            //Serial.println(record);
+            // Serial.print("Logging: ");
+            // Serial.println(record);
         }
         loggerCounter++;
     }
@@ -4931,7 +5145,7 @@ void FILAMENT_ESTIMATOR::updateDetection()
             printingStatus = STATUS_EMPTY;
             printingStatusString = "STATUS_EMPTY";
             Serial.println(F("Status changed from STATUS_BOOT to STATUS_EMPTY."));
-            purgeCounter = 3; //purge array
+            purgeCounter = 3; // purge array
             if (isLogging == true)
             {
                 String record;
@@ -4945,11 +5159,11 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             if (purgeCounter == 0)
             {
-                //Do not change state during purge counting
+                // Do not change state during purge counting
                 printingStatus = STATUS_IDLE;
                 printingStatusString = "STATUS_IDLE";
                 Serial.println(F("Status changed from STATUS_BOOT to STATUS_IDLE."));
-                purgeCounter = 3; //purge array after few samples
+                purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
                     String record;
@@ -4966,11 +5180,11 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             if (purgeCounter == 0)
             {
-                //Do not change state during purge counting
+                // Do not change state during purge counting
                 printingStatus = STATUS_IDLE;
                 printingStatusString = "STATUS_IDLE";
                 Serial.println(F("Status changed from STATUS_EMPTY to STATUS_IDLE."));
-                purgeCounter = 3; //purge array after few samples
+                purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
                     String record;
@@ -4987,11 +5201,11 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             if (purgeCounter == 0)
             {
-                //Do not change state during purge counting
+                // Do not change state during purge counting
                 printingStatus = STATUS_EMPTY;
                 printingStatusString = "STATUS_EMPTY";
                 Serial.println(F("Status changed from STATUS_IDLE to STATUS_EMPTY."));
-                purgeCounter = 3; //purge array after few samples
+                purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
                     String record;
@@ -5004,19 +5218,23 @@ void FILAMENT_ESTIMATOR::updateDetection()
         }
         else if (getStddev(30) >= 1 && getStddev(30) < 30 && stddev3Count >= 10)
         {
-            //Print started
-            //From STATUS_IDLE to STATUS_PRINTING
+            // Print started
+            // From STATUS_IDLE to STATUS_PRINTING
             //(1) 30 sec stddev between 1 and 30
             //(2) 10 of the last 30 stddev(3) samples is more than 1.0
 
-            //Reset all notification flags
+            // Reset all notification flags
             lowFilamentNotificationSent = false;
             fallOffRackNotificationSent = false;
 
             printingStatus = STATUS_PRINTING;
             printingStatusString = "STATUS_PRINTING";
             Serial.println(F("Status changed from STATUS_IDLE to STATUS_PRINTING."));
-            notify(NOTIFICATION_PRINT_STARTED);
+            if (setting.notifyOnPrintStarted)
+            {
+                notify(NOTIFICATION_PRINT_STARTED);
+            }
+
             if (isLogging == true)
             {
                 String record;
@@ -5033,11 +5251,14 @@ void FILAMENT_ESTIMATOR::updateDetection()
     case STATUS_PRINTING:
         if (getStddev(30) < 0.5 && stddev3Count < 3)
         {
-            //print job completed
+            // print job completed
             printingStatus = STATUS_IDLE;
             printingStatusString = "STATUS_IDLE";
             Serial.println(F("Status changed from STATUS_PRINTING to STATUS_IDLE."));
-            notify(NOTIFICATION_PRINT_COMPLETED);
+            if (setting.notifyOnPrintCompleted)
+            {
+                notify(NOTIFICATION_PRINT_COMPLETED);
+            }
 
             if (isLogging == true)
             {
@@ -5055,11 +5276,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             if (getStddev(10) > 100 && getMean(3) < (setting.spoolHolderWeight - 50))
             {
-                //fall of rack, once per print, reset flag upon new print
+                // fall of rack, once per print, reset flag upon new print
                 notify(NOTIFICATIONI_FALL_OFF_RACK);
                 fallOffRackNotificationSent = true;
-
-                lowFilamentNotificationSent = true; //inhibit low filament notification
+                lowFilamentNotificationSent = true; // inhibit low filament notification
             }
         }
 
@@ -5067,15 +5287,18 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             if (filamentWeight < setting.lowFilamentThreshold && getStddev(30) < 30)
             {
-                //notification sent once per print, reset flag upon new print
-                notify(NOTIFICATIONI_LOW_FILAMENT);
+                // notification sent once per print, reset flag upon new print
+                if (setting.notifyOnLowFilament)
+                {
+                    notify(NOTIFICATIONI_LOW_FILAMENT);
+                }
                 lowFilamentNotificationSent = true;
             }
         }
         break;
     default:
         break;
-    } //switch (printingStatus)
+    } // switch (printingStatus)
 
     if (purgeCounter > 0)
     {
@@ -5089,24 +5312,24 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
     previousTotalWeight = totalWeight;
 
-    //auto github update related
+    // auto github update related
     if (setting.autoGithubUpdate == true)
     {
         if (nextCheckTimeMillis - millis() < 10 * 60000)
         {
             if (stddev3Count >= 10)
             {
-                //increase countdown time to 10 minutes
-                //if there are some movements detected
+                // increase countdown time to 10 minutes
+                // if there are some movements detected
                 nextCheckTimeMillis = millis() + 10 * 60000 + 5000;
-                //Serial.println(F("Auto github update countdown extended."));
+                // Serial.println(F("Auto github update countdown extended."));
             }
         }
     }
 
-    //globalPrintMemory(); //debug oom
+    // globalPrintMemory(); //debug oom
 
-    //update page every second
+    // update page every second
     displayPage(currentPage);
 
     detectionTimer = millis();
@@ -5139,23 +5362,23 @@ void FILAMENT_ESTIMATOR::pushStddev(float entry)
 }
 void FILAMENT_ESTIMATOR::purgeWeight(float value)
 {
-    //purge the whole detectionArray with single value
-    //used when there is a condition change
+    // purge the whole detectionArray with single value
+    // used when there is a condition change
     for (uint16_t i = 0; i < DETECTION_SAMPLE_SIZE; i++)
     {
         pushWeight(value);
     }
-    Serial.println(F("Weight Array purged."));
+    // Serial.println(F("Weight Array purged."));
 }
 void FILAMENT_ESTIMATOR::purgeStddev(float value)
 {
-    //purge the whole detectionArray with single value
-    //used when there is a condition change
+    // purge the whole detectionArray with single value
+    // used when there is a condition change
     for (uint16_t i = 0; i < DETECTION_SAMPLE_SIZE; i++)
     {
         pushStddev(value);
     }
-    Serial.println(F("Stddev Array purged."));
+    // Serial.println(F("Stddev Array purged."));
 }
 float FILAMENT_ESTIMATOR::getSum(uint16_t samples)
 {
@@ -5251,7 +5474,7 @@ void FILAMENT_ESTIMATOR::notify(NOTIFICATION_MESSAGE message)
     }
     if (!Blynk.connected())
     {
-        Serial.println(F("Failed. Blynk not connected."));
+        Serial.println(F("Notification failed. Blynk not connected."));
         return;
     }
     switch (message)
@@ -5380,53 +5603,53 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
 
     drawOverlay("Checking", "Github", 2000);
 
-    //globalPrintMemory("Before certStore");
+    // globalPrintMemory("Before certStore");
 
     // A single, global CertStore which can be used by all
     // connections.  Needs to stay live the entire time any of
     // the WiFiClientBearSSLs are present.
-    BearSSL::CertStore certStore; //takes only 16 bytes
+    BearSSL::CertStore certStore; // takes only 16 bytes
     _certStore = &certStore;
 
-    //globalPrintMemory("After certStore");
+    // globalPrintMemory("After certStore");
 
-    if (checkGithubConnectionPrerequisite() == false) //certs read takes 50 bytes
+    if (checkGithubConnectionPrerequisite() == false) // certs read takes 50 bytes
     {
         return;
     }
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+    if (VERBOSE_DEBUG_PRINT == true)
         globalPrintMemory("After certs read");
 
-    BearSSL::WiFiClientSecure client; //7k memory required
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
-        globalPrintMemory(F("After client creation.")); //about 26k left
+    BearSSL::WiFiClientSecure client; // 7k memory required
+    if (VERBOSE_DEBUG_PRINT == true)
+        globalPrintMemory(F("After client creation.")); // about 26k left
     client.setCertStore(_certStore);
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
-        globalPrintMemory("After client setCertStore."); //same, 26k left
+    if (VERBOSE_DEBUG_PRINT == true)
+        globalPrintMemory("After client setCertStore."); // same, 26k left
 
-    //Try to reduce connection memory usage
-    //Checking MFLN support
+    // Try to reduce connection memory usage
+    // Checking MFLN support
     bool MFLN_Support = client.probeMaxFragmentLength(githubHost, githubPort, 512);
     if (MFLN_Support == true)
     {
-        //Serial.println(F("MFLN 512 fragment length probing ok."));
+        // Serial.println(F("MFLN 512 fragment length probing ok."));
         client.setBufferSizes(512, 512);
     }
 
-    if (!client.connect(githubHost, githubPort)) //5k memory required (22k without MFLN)
+    if (!client.connect(githubHost, githubPort)) // 5k memory required (22k without MFLN)
     {
         Serial.println(F("Connection to gitgub failed."));
         drawOverlay("Failed", "", 2000);
         return;
     }
-    else //connected ok
+    else // connected ok
     {
         if (MFLN_Support == true)
         {
             if (client.getMFLNStatus())
             {
-                //connection RAM usage reduced to 5.5k using 512 bytes MFLN
-                //Serial.println(F("MFLN 512 negotiation succeeded."));
+                // connection RAM usage reduced to 5.5k using 512 bytes MFLN
+                // Serial.println(F("MFLN 512 negotiation succeeded."));
             }
             else
             {
@@ -5435,31 +5658,31 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             }
         }
     }
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
-        globalPrintMemory("After client connection"); //about 20k left
+    if (VERBOSE_DEBUG_PRINT == true)
+        globalPrintMemory("After client connection"); // about 20k left
 
-    //check firmware
+    // check firmware
     if (forceCheck == true || (githubUpdateAvailable == false && doUpdate == true))
     {
-        //Start to check github
+        // Start to check github
 
         Serial.println(F("Checking github latest release version:"));
 
-        String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest"; //has to use readStringUntil('\n'), otherwise buffer overflow result in nothing can be printed
+        String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/releases/latest"; // has to use readStringUntil('\n'), otherwise buffer overflow result in nothing can be printed
 
-        //rate limit to 60 calls per hour
-        //fetch the X-RateLimit-Remaining value
+        // rate limit to 60 calls per hour
+        // fetch the X-RateLimit-Remaining value
         client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                      "Host: " + githubHost + "\r\n" +
                      "User-Agent: FuzzySpooder\r\n" +
                      "Connection: close\r\n\r\n");
-        //fetch the http header
+        // fetch the http header
         uint8_t releaseLimitRemaining = 0;
         uint16_t releaseContentLength = 0;
         while (client.connected())
         {
             String response = client.readStringUntil('\n');
-            if (DEBUG_PRINT_GITHUB_CONTENT == true)
+            if (VERBOSE_DEBUG_PRINT == true)
             {
                 Serial.println(response);
             }
@@ -5469,27 +5692,27 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             }
             if (response.indexOf("X-RateLimit-Remaining:") == 0)
             {
-                //response looks like this:
-                //X-RateLimit-Remaining: 56
+                // response looks like this:
+                // X-RateLimit-Remaining: 56
                 String sub = response.substring(response.indexOf(" ") + 1);
                 releaseLimitRemaining = sub.toInt();
-                //Serial.print(F("X-RateLimit-Remaining: "));
-                //Serial.println(limitRemaining);
+                // Serial.print(F("X-RateLimit-Remaining: "));
+                // Serial.println(limitRemaining);
             }
             if (response.indexOf("Content-Length:") == 0)
             {
-                //response looks like this:
-                //Content-Length: 3799
+                // response looks like this:
+                // Content-Length: 3799
                 String sub = response.substring(response.indexOf(" ") + 1);
                 releaseContentLength = sub.toInt();
-                //Serial.print(F("Content-Length: "));
-                //Serial.println(contentLength);
+                // Serial.print(F("Content-Length: "));
+                // Serial.println(contentLength);
             }
         }
-        //Check RAM
+        // Check RAM
         if (ESP.getFreeHeap() > (releaseContentLength + 2048))
         {
-            //ok, with 2k reserve
+            // ok, with 2k reserve
         }
         else
         {
@@ -5498,16 +5721,16 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             globalPrintMemory("");
             return;
         }
-        uint16_t capacity = releaseContentLength + 2048; //https://arduinojson.org/v6/assistant/
+        uint16_t capacity = releaseContentLength + 2048; // https://arduinojson.org/v6/assistant/
         DynamicJsonDocument doc(capacity);
 
-        //fetch the github release json doc
+        // fetch the github release json doc
         while (client.connected())
         {
             if (client.available())
             {
                 DeserializationError error;
-                error = deserializeJson(doc, client.readStringUntil('\n')); //no RAM/speed difference using Stream or String
+                error = deserializeJson(doc, client.readStringUntil('\n')); // no RAM/speed difference using Stream or String
                 if (error != error.Ok)
                 {
                     Serial.print(F("Deserialization error: "));
@@ -5517,38 +5740,38 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                 }
             }
         }
-        globalPrintMemory("After deserializeJson"); //Heap: 14888    Block: 12040
-        //client.stop(); //increases 5k RAM
-        //globalPrintMemory("After client.stop()");   //23k left,
+        globalPrintMemory("After deserializeJson"); // Heap: 14888    Block: 12040
+        // client.stop(); //increases 5k RAM
+        // globalPrintMemory("After client.stop()");   //23k left,
 
-        //print the content
-        if (DEBUG_PRINT_GITHUB_CONTENT == true)
+        // print the content
+        if (VERBOSE_DEBUG_PRINT == true)
         {
             serializeJsonPretty(doc, Serial);
             Serial.println();
         }
 
-        //globalPrintMemory("Before doc.containsKey('tag_name')"); //Heap: 18312    Block: 18128
-        //RAM release ok at this point
-        //Fetch the content
+        // globalPrintMemory("Before doc.containsKey('tag_name')"); //Heap: 18312    Block: 18128
+        // RAM release ok at this point
+        // Fetch the content
         if (doc.containsKey("tag_name"))
         {
             String releaseTag = doc["tag_name"];
-            githubVersion = releaseTag; //Storing the String tag into global reserved variable
+            githubVersion = releaseTag; // Storing the String tag into global reserved variable
             githubVersionObtained = true;
 
             convertTagToVersion(releaseTag, &githubLatestReleaseVersion);
-            //Serial.print(F("Github version(string tag): "));
-            //Serial.println(releaseTag);
+            // Serial.print(F("Github version(string tag): "));
+            // Serial.println(releaseTag);
 
             Serial.print(F("Github latest version: "));
             printVersion(githubLatestReleaseVersion);
 
             Serial.print(F("Current firmware version: "));
             printVersion(currentVersion);
-            //bool isPrerelease = doc["prerelease"];
-            //Serial.print(F("Is prerelease: "));
-            //Serial.println(isPrerelease ? "Yes" : "No");
+            // bool isPrerelease = doc["prerelease"];
+            // Serial.print(F("Is prerelease: "));
+            // Serial.println(isPrerelease ? "Yes" : "No");
             if (versionToNumber(githubLatestReleaseVersion) > versionToNumber(currentVersion))
             {
 
@@ -5561,7 +5784,7 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
 
                     if (strcmp(asset_type, GHOTA_CONTENT_TYPE) == 0 && strcmp(asset_name, _binFile) == 0)
                     {
-                        //firmware file found
+                        // firmware file found
                         Serial.print(F("New version at: "));
                         Serial.println(asset_url);
                         _updateURL = asset_url;
@@ -5576,15 +5799,15 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                     }
                 }
             }
-            else //if (versionToNumber(githubLatestReleaseVersion) > versionToNumber(currentVersion))
+            else // if (versionToNumber(githubLatestReleaseVersion) > versionToNumber(currentVersion))
             {
-                //Serial.println(F("No new version available on github."));
+                // Serial.println(F("No new version available on github."));
                 githubUpdateAvailable = false;
-                //RAM release ok at this point.
+                // RAM release ok at this point.
                 return;
             }
         }
-        else //if (!doc.containsKey("tag_name"))
+        else // if (!doc.containsKey("tag_name"))
         {
             Serial.println(F("No tag_name found."));
             githubVersionObtained = false;
@@ -5593,15 +5816,15 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             return;
         }
 
-        //resolve redirects
-        //splitURL = _urlDetails(_updateURL); //Could be sourece of RAM fragmentation
+        // resolve redirects
+        // splitURL = _urlDetails(_updateURL); //Could be sourece of RAM fragmentation
         //_updateURL requires some 513 bytes to hold the URL
-        //If used locally, spooder cannot perform seperated check/update operation.
-        //If used globally, need to reserved large enough RAM to prevent RAM fragmentation
-        //So _updateURL String size 768 is used here, globally.
+        // If used locally, spooder cannot perform seperated check/update operation.
+        // If used globally, need to reserved large enough RAM to prevent RAM fragmentation
+        // So _updateURL String size 768 is used here, globally.
 
-        //Serial.print(F("_updateURL = "));
-        //Serial.println(_updateURL);
+        // Serial.print(F("_updateURL = "));
+        // Serial.println(_updateURL);
         /* _updateURL example: 515 bytes
         _updateURL = https://github-releases.githubusercontent.com/347605015/
         c6847f91-dac8-43b9-a55e-7bdae94af08f?X-Amz-Algorithm=AWS4-HMAC-SHA256&X
@@ -5663,8 +5886,8 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
 
                     if (location.startsWith("http://") || location.startsWith("https://"))
                     {
-                        //absolute URL - separate host from path
-                        //urlDetails_t url = _urlDetails(location);
+                        // absolute URL - separate host from path
+                        // urlDetails_t url = _urlDetails(location);
 
                         int port = 80;
                         if (location.startsWith("http://"))
@@ -5684,15 +5907,15 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
                     }
                     else
                     {
-                        //relative URL - host is the same as before, location represents the new path.
+                        // relative URL - host is the same as before, location represents the new path.
                         path = location;
                     }
-                    //leave the while loop so we don't set isFinalURL on the next line of the header.
+                    // leave the while loop so we don't set isFinalURL on the next line of the header.
                     break;
                 }
                 else
                 {
-                    //location header not present - this must not be a redirect. Treat this as the final address.
+                    // location header not present - this must not be a redirect. Treat this as the final address.
                     isFinalURL = true;
                 }
                 if (response == "\r")
@@ -5704,7 +5927,7 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
         if (isFinalURL)
         {
             String finalURL = proto + host + path;
-            _updateURL = finalURL; //Not the source of RAM fragment problem
+            _updateURL = finalURL; // Not the source of RAM fragment problem
         }
         else
         {
@@ -5713,38 +5936,38 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             return;
         }
 
-    } //if (forceCheck == true || githubUpdateAvailable == false)
+    } // if (forceCheck == true || githubUpdateAvailable == false)
 
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
-        globalPrintMemory("After tag check"); //Heap: 20432    Block: 19944
+    if (VERBOSE_DEBUG_PRINT == true)
+        globalPrintMemory("After tag check"); // Heap: 20432    Block: 19944
 
-    //RAM release ok only tag check: Heap: 32112    Block: 30192
+    // RAM release ok only tag check: Heap: 32112    Block: 30192
 
-    //Check Data Folder
+    // Check Data Folder
     if (checkDataFolder == true)
     {
         // root/sub folders to sync
         String pathData = "/data";
         listGitgubContent(client, pathData, updateDataFolder);
-        //String pathImages = "/data/images";
-        //listGitgubContent(client, pathImages, updateDataFolder)
+        // String pathImages = "/data/images";
+        // listGitgubContent(client, pathImages, updateDataFolder)
 
-    } //if (getDataFolder == true)
+    } // if (getDataFolder == true)
 
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+    if (VERBOSE_DEBUG_PRINT == true)
         globalPrintMemory("After data fetching: ");
 
-    //globalPrintMemory("Before update:"); //Heap: 21040    Block: 19640 (without update)
-    //return; //Heap: 34800    Block: 34472 if return here
+    // globalPrintMemory("Before update:"); //Heap: 21040    Block: 19640 (without update)
+    // return; //Heap: 34800    Block: 34472 if return here
 
-    //Update firmware
+    // Update firmware
     if (githubUpdateAvailable == true && doUpdate == true)
     {
-        ESP8266HTTPUpdate ESPhttpUpdate; //use local instance to free up RAM
+        ESP8266HTTPUpdate ESPhttpUpdate; // use local instance to free up RAM
         Serial.println(F("Updating now..."));
         drawOverlay("Updating", "Firmware", 5000);
 
-        //set flag for time extension
+        // set flag for time extension
         setting.automaticUpdateJustPerformed = true;
         saveToEEPROM();
 
@@ -5764,22 +5987,22 @@ void FILAMENT_ESTIMATOR::checkGithubLatestRelease(bool forceCheck, bool doUpdate
             break;
         }
 
-        //if the program gets here, automatic update is not successful
-        //clear flag
+        // if the program gets here, automatic update is not successful
+        // clear flag
         setting.automaticUpdateJustPerformed = false;
         saveToEEPROM();
     }
     drawOverlay("Done", "", 2000);
-    //globalPrintMemory("After update:"); //Heap: 21040    Block: 19640
+    // globalPrintMemory("After update:"); //Heap: 21040    Block: 19640
     return;
 }
 void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, String &path, bool updateDataFolder)
 {
-    //Getting contents of \data folder
+    // Getting contents of \data folder
 
     Serial.print(F("Getting contents of "));
     Serial.println(path);
-    if (DEBUG_PRINT_GITHUB_RAM_USAGE == true)
+    if (VERBOSE_DEBUG_PRINT == true)
         globalPrintMemory("data");
     if (!client.connect(githubHost, githubPort))
     {
@@ -5787,19 +6010,19 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
         return;
     }
     String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/contents" + path;
-    //String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/images?ref=main"; //subfolder requires ref
+    // String url = "/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/images?ref=main"; //subfolder requires ref
     client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                  "Host: " + githubHost + "\r\n" +
                  "User-Agent: FuzzySpooder\r\n" +
                  "Connection: close\r\n\r\n");
 
-    //fetch the http header
+    // fetch the http header
     uint8_t dataLimitRemaining = 0;
     uint16_t dataContentLength = 0;
     while (client.connected())
     {
         String response = client.readStringUntil('\n');
-        if (DEBUG_PRINT_GITHUB_CONTENT == true)
+        if (VERBOSE_DEBUG_PRINT == true)
         {
             Serial.println(response);
         }
@@ -5809,27 +6032,27 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
         }
         if (response.indexOf("X-RateLimit-Remaining:") == 0)
         {
-            //response looks like this:
-            //X-RateLimit-Remaining: 56
+            // response looks like this:
+            // X-RateLimit-Remaining: 56
             String sub = response.substring(response.indexOf(" ") + 1);
             dataLimitRemaining = sub.toInt();
-            //Serial.print(F("X-RateLimit-Remaining: "));
-            //Serial.println(limitRemaining);
+            // Serial.print(F("X-RateLimit-Remaining: "));
+            // Serial.println(limitRemaining);
         }
         if (response.indexOf("Content-Length:") == 0)
         {
-            //response looks like this:
-            //Content-Length: 3799
+            // response looks like this:
+            // Content-Length: 3799
             String sub = response.substring(response.indexOf(" ") + 1);
             dataContentLength = sub.toInt();
-            //Serial.print(F("Content-Length: "));
-            //Serial.println(contentLength);
+            // Serial.print(F("Content-Length: "));
+            // Serial.println(contentLength);
         }
     }
-    //Check RAM
+    // Check RAM
     if (ESP.getFreeHeap() > (dataContentLength + 2048))
     {
-        //ok, with 2k reserve
+        // ok, with 2k reserve
     }
     else
     {
@@ -5838,16 +6061,16 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
         globalPrintMemory("");
         return;
     }
-    uint16_t capacity = dataContentLength + 2048; //https://arduinojson.org/v6/assistant/
+    uint16_t capacity = dataContentLength + 2048; // https://arduinojson.org/v6/assistant/
     DynamicJsonDocument doc(capacity);
 
-    //fetch the github release json doc
+    // fetch the github release json doc
     while (client.connected())
     {
         if (client.available())
         {
             DeserializationError error;
-            error = deserializeJson(doc, client.readStringUntil('\n')); //no RAM/speed difference using Stream or String
+            error = deserializeJson(doc, client.readStringUntil('\n')); // no RAM/speed difference using Stream or String
             if (error != error.Ok)
             {
                 Serial.print(F("Deserialization error: "));
@@ -5858,14 +6081,14 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
         }
     }
 
-    //print the content
-    if (DEBUG_PRINT_GITHUB_CONTENT == true)
+    // print the content
+    if (VERBOSE_DEBUG_PRINT == true)
     {
         serializeJsonPretty(doc, Serial);
         Serial.println();
     }
 
-    //JsonObject object = doc.as<JsonObject>();
+    // JsonObject object = doc.as<JsonObject>();
     /*
         for (JsonObject item : doc.as<JsonArray>())
         {
@@ -5960,7 +6183,7 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
                         Serial.println(F("File info found."));
                         if (localFileObj.getMember("sha") == "")
                         {
-                            //first time checking github, putting github sha into local file info
+                            // first time checking github, putting github sha into local file info
                             localFileObj["sha"] = remoteFileObj.getMember("sha");
                             Serial.print(F("Update \"sha\" to"));
                             Serial.println((const char *)localFileObj.getMember("sha"));
@@ -5968,39 +6191,39 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
                     }
                     else
                     {
-                        //Serial.println(F("Not found in local file info."));
+                        // Serial.println(F("Not found in local file info."));
                     }
-                } //for (JsonObject localFileObj : localArr)
+                } // for (JsonObject localFileObj : localArr)
             }
 
-        } //if (remoteFileObj.getMember("type") == "file")
+        } // if (remoteFileObj.getMember("type") == "file")
 
-    } //for (JsonObject remoteFileObj : remoteArr)
+    } // for (JsonObject remoteFileObj : remoteArr)
 
-    serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    serializeJsonPretty(localFileDoc, Serial); // output to Serial
     Serial.println();
-    //todo steps
-    //1. list github  directory
+    // todo steps
+    // 1. list github  directory
 
-    //2. if listed item is a file, push the item into a json doc
+    // 2. if listed item is a file, push the item into a json doc
 
-    //3. iterate json doc items
-    //4 omit these files
-    //  - config.json
-    //5. compare each item with items in the localfiles.json
-    //6. if the tag is different, download the file from github to esp8266 file system
-    //7. update the new tag in localfiles.json
+    // 3. iterate json doc items
+    // 4 omit these files
+    //   - config.json
+    // 5. compare each item with items in the localfiles.json
+    // 6. if the tag is different, download the file from github to esp8266 file system
+    // 7. update the new tag in localfiles.json
 
-    //downliod a test file
-    //imported from https://forum.arduino.cc/t/nodemcu-esp8266-downloading-an-image-file-to-spiffs/543405/2
+    // downliod a test file
+    // imported from https://forum.arduino.cc/t/nodemcu-esp8266-downloading-an-image-file-to-spiffs/543405/2
 
-    //https://api.github.com/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/testdoc.txt?ref=main
-    //https://github.com/FuzzyNoodle/Fuzzy-Spooder/blob/main/data/testdoc.txt
-    //https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt
+    // https://api.github.com/repos/FuzzyNoodle/Fuzzy-Spooder/contents/data/testdoc.txt?ref=main
+    // https://github.com/FuzzyNoodle/Fuzzy-Spooder/blob/main/data/testdoc.txt
+    // https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt
     if (updateDataFolder == true)
     {
         HTTPClient http;
-        //url = "https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt";
+        // url = "https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/testdoc.txt";
         String url = "https://raw.githubusercontent.com/FuzzyNoodle/Fuzzy-Spooder/main/data/images/logo.bmp";
 
         String fileName = "/logo.bmp";
@@ -6044,7 +6267,7 @@ void FILAMENT_ESTIMATOR::listGitgubContent(BearSSL::WiFiClientSecure &client, St
                         // read up to 128 byte
                         int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
                         // write it to Serial
-                        //Serial.write(buff, c);
+                        // Serial.write(buff, c);
                         file.write(buff, c);
                         if (len > 0)
                         {
@@ -6072,32 +6295,32 @@ void FILAMENT_ESTIMATOR::manageLocalFileInfo()
         return;
     }
     Serial.println(F("Managing local files:"));
-    //1.open localfile.json as JSONDOC
-    //2.iterate through FS dir, if exist in json, add to json
-    //3.iterate through localfile.json, if not exist in FS, remove json
-    //4.save localfile.json
+    // 1.open localfile.json as JSONDOC
+    // 2.iterate through FS dir, if exist in json, add to json
+    // 3.iterate through localfile.json, if not exist in FS, remove json
+    // 4.save localfile.json
 
-    //listDir("");
+    // listDir("");
 
-    //1.open localfile.json
-    //Serial.println(F("Listing localfiles.json:"));
+    // 1.open localfile.json
+    // Serial.println(F("Listing localfiles.json:"));
     File localFileInfo = LittleFS.open(localFileInfoPath, "r");
-    //todo dertimine size
+    // todo dertimine size
     DynamicJsonDocument localFileDoc(2048);
     deserializeJson(localFileDoc, localFileInfo);
-    //serializeJsonPretty(localFileDoc, Serial); //output to Serial
-    //Serial.println();
+    // serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    // Serial.println();
     LOCAL_FILE_INFO_STRUCT fInfo;
-    //2.iterate through FS dir
+    // 2.iterate through FS dir
     Serial.println(F("Iterate through local files:"));
 
     iterateLocalFiles("/", localFileDoc);
 
-    //Serial.println(F("Listing new localfiles.json:"));
-    //serializeJsonPretty(localFileDoc, Serial); //output to Serial
-    //Serial.println();
+    // Serial.println(F("Listing new localfiles.json:"));
+    // serializeJsonPretty(localFileDoc, Serial); //output to Serial
+    // Serial.println();
 
-    //3.iterate through localfile.json, if not exist in FS, remove json
+    // 3.iterate through localfile.json, if not exist in FS, remove json
     Serial.println(F("Iterate through fileinfo.json:"));
     JsonArray arr = localFileDoc.as<JsonArray>();
     uint8_t indexToRemove = 0;
@@ -6106,7 +6329,7 @@ void FILAMENT_ESTIMATOR::manageLocalFileInfo()
         String path = objInFile.getMember("path");
         if (path)
         {
-            //path contains "data/" for all files, however, FS does not. Need to remove this.
+            // path contains "data/" for all files, however, FS does not. Need to remove this.
             String fsPath = path.substring(5);
             if (!LittleFS.open(fsPath, "r"))
             {
@@ -6118,7 +6341,7 @@ void FILAMENT_ESTIMATOR::manageLocalFileInfo()
         indexToRemove++;
     }
 
-    //4.save localfile.json
+    // 4.save localfile.json
     localFileInfo = LittleFS.open(localFileInfoPath, "w");
     serializeJsonPretty(localFileDoc, localFileInfo);
 }
@@ -6130,7 +6353,7 @@ void FILAMENT_ESTIMATOR::iterateLocalFiles(String dirname, DynamicJsonDocument &
         if (dir.isFile())
         {
             String name = dir.fileName();
-            String path = "data"; //github path includes filename
+            String path = "data"; // github path includes filename
             if (dirname == "/")
             {
                 path += "/";
@@ -6141,7 +6364,7 @@ void FILAMENT_ESTIMATOR::iterateLocalFiles(String dirname, DynamicJsonDocument &
             }
             path += name;
 
-            //check if the obj already exist
+            // check if the obj already exist
             JsonArray arr = localFileDoc.as<JsonArray>();
             bool isExist = false;
             for (JsonObject objInFile : arr)
@@ -6153,10 +6376,10 @@ void FILAMENT_ESTIMATOR::iterateLocalFiles(String dirname, DynamicJsonDocument &
             }
             if (isExist == true)
             {
-                //Serial.print(path);
-                //Serial.println(isExist ? " exists." : " does not exist.");
+                // Serial.print(path);
+                // Serial.println(isExist ? " exists." : " does not exist.");
             }
-            else //does not exist, add a new object
+            else // does not exist, add a new object
             {
                 JsonObject obj = localFileDoc.createNestedObject();
                 obj["name"] = name;
@@ -6166,7 +6389,7 @@ void FILAMENT_ESTIMATOR::iterateLocalFiles(String dirname, DynamicJsonDocument &
                 Serial.println(F(" added to localfile.json."));
             }
         }
-        else //isDirectory()
+        else // isDirectory()
         {
             String subDir = (String(dirname) + dir.fileName());
             iterateLocalFiles(subDir, localFileDoc);
@@ -6195,8 +6418,8 @@ bool FILAMENT_ESTIMATOR::checkGithubConnectionPrerequisite()
         return false;
     }
     numCerts = _certStore->initCertStore(LittleFS, PSTR("/certs.idx"), PSTR("/certs.ar"));
-    //Serial.print(F("Number of CA certs read: "));
-    //Serial.println(numCerts);
+    // Serial.print(F("Number of CA certs read: "));
+    // Serial.println(numCerts);
     if (numCerts == 0)
     {
         Serial.println(F("No CA certs found. Unable to establish https connection."));
@@ -6283,7 +6506,7 @@ bool FILAMENT_ESTIMATOR::convertTagToVersion(String t, VERSION_STRUCT *v)
 {
     int8_t firstDotIndex = t.indexOf(".");
     int8_t secondDotIndex = t.lastIndexOf(".");
-    //simple check if the tag is valid, should contain two '.' at different places
+    // simple check if the tag is valid, should contain two '.' at different places
     if (firstDotIndex == -1 || secondDotIndex == -1)
     {
         return false;
@@ -6295,7 +6518,7 @@ bool FILAMENT_ESTIMATOR::convertTagToVersion(String t, VERSION_STRUCT *v)
     v->major = t.substring(0, firstDotIndex).toInt();
     v->minor = t.substring(firstDotIndex + 1, secondDotIndex).toInt();
     v->patch = t.substring(secondDotIndex + 1).toInt();
-    return true; //tag passes simple check
+    return true; // tag passes simple check
 }
 void FILAMENT_ESTIMATOR::printVersion(VERSION_STRUCT v)
 {
@@ -6313,11 +6536,11 @@ void FILAMENT_ESTIMATOR::saveGitgubFileToFs()
 }
 void FILAMENT_ESTIMATOR::setNextCheckCountdown()
 {
-    nextCheckTimeMillis = millis() + random(60 * 60000, 120 * 60000); //60~120 min in ms
-    //nextCheckTimeMillis = millis() + 2 * 60000;
+    nextCheckTimeMillis = millis() + random(60 * 60000, 120 * 60000); // 60~120 min in ms
+    // nextCheckTimeMillis = millis() + 2 * 60000;
     if (setting.automaticUpdateJustPerformed == true)
     {
-        //just performed an automatic update, increase next check count down
+        // just performed an automatic update, increase next check count down
         setting.automaticUpdateJustPerformed = false;
         saveToEEPROM();
         nextCheckTimeMillis += random(120 * 60000, 240 * 60000);
@@ -6330,12 +6553,12 @@ void FILAMENT_ESTIMATOR::updateAutoGithubCheck()
         return;
     }
 
-    //less than one minute
+    // less than one minute
     if (nextCheckTimeMillis - millis() < 60000)
     {
-        //check version on GitHub and update firmware if new version is available
+        // check version on GitHub and update firmware if new version is available
         checkGithubLatestRelease(true, true, false, false);
-        setNextCheckCountdown(); //in case of update firmware failure
+        setNextCheckCountdown(); // in case of update firmware failure
     }
 
     updateAutoGithubCheckTimer = millis();
@@ -6350,4 +6573,237 @@ void FILAMENT_ESTIMATOR::pause()
             break;
         }
     }
+}
+void FILAMENT_ESTIMATOR::enterHotspotMode()
+{
+    Serial.println(F("Enter hotspot mode."));
+    isHotspotMode = true;
+
+    if (enableWifi == true)
+    {
+        setWifi(false);
+    }
+    delay(100);
+
+    IPAddress accessPointIP(192, 168, 4, 1);
+    IPAddress gateway(192, 168, 4, 1);
+    IPAddress subnet(255, 255, 255, 0);
+
+    WiFi.mode(WIFI_AP);
+
+    Serial.print("Setting soft-AP configuration ... ");
+    Serial.println(WiFi.softAPConfig(accessPointIP, gateway, subnet) ? "Ready" : "Failed!");
+
+    Serial.print("Setting soft-AP ... ");
+    Serial.println(WiFi.softAP("Spooder_Setup") ? "Ready" : "Failed!");
+
+    Serial.print("Soft-AP IP address = ");
+    Serial.println(WiFi.softAPIP());
+
+    setWebServer(true);
+
+    // if DNSServer is started with "*" for domain name, it will reply with
+    // provided IP to all DNS request
+    dnsServer.start(DNS_PORT, "*", accessPointIP);
+}
+void FILAMENT_ESTIMATOR::exitHotspotMode()
+{
+    Serial.println(F("Exit hotspot mode."));
+    dnsServer.stop();
+    bool exitSoftAP = WiFi.softAPdisconnect(true);
+    Serial.print(F("Disconnecting soft-AP... "));
+    Serial.println(exitSoftAP ? F("ok") : F("failed"));
+    delay(500); // prevent wdt reset for unknown reason
+
+    WiFi.mode(WIFI_STA);
+    isHotspotMode = false;
+    // turn wifi on again if desired
+    if (setting.optionsWiFi == true)
+    {
+        setWifi(true);
+    }
+    /*
+    if (resetWiFi == true)
+    {
+        resetWiFi = false;
+    }
+    // reconnect blynk if blynk auth token changed
+    if (resetBlynk == true)
+    {
+        if (enableBlynk == true)
+        {
+            setBlynk(false);
+            setBlynk(true);
+        }
+        resetBlynk = false;
+    }
+    */
+}
+void FILAMENT_ESTIMATOR::handleSetupSave()
+{
+    Serial.println(F("Setup save button pressed, values:"));
+    SETUP_SAVE_REPLY_MESSAGE ssidReply;
+    SETUP_SAVE_REPLY_MESSAGE passwordReply;
+    SETUP_SAVE_REPLY_MESSAGE blynkAuthReply;
+
+    String ssid = webServer->arg("ssid");
+    String password = webServer->arg("password");
+    String blynkAuth = webServer->arg("blynk_auth_token");
+
+    Serial.print(ssid);
+    Serial.print(F(":"));
+    Serial.println(ssid.length());
+
+    Serial.print(password);
+    Serial.print(F(":"));
+    Serial.println(password.length());
+
+    Serial.print(blynkAuth);
+    Serial.print(F(":"));
+    Serial.println(blynkAuth.length());
+
+    // some error checking
+    if (ssid.equals(String(wifi_ssid)))
+    {
+        ssidReply = SETUP_NO_CHANGE;
+    }
+    else
+    {
+        if (ssid.length() > 32)
+        {
+            ssidReply = SETUP_TOO_LONG;
+        }
+        else if (ssid.length() == 0)
+        {
+            ssidReply = SETUP_CLEARED;
+            strcpy(wifi_ssid, ssid.c_str());
+        }
+        else
+        {
+            ssidReply = SETUP_SAVED;
+            strcpy(wifi_ssid, ssid.c_str());
+        }
+    }
+
+    if (password.equals(String(wifi_password)))
+    {
+        passwordReply = SETUP_NO_CHANGE;
+    }
+    else
+    {
+        if (password.length() > 63)
+        {
+            passwordReply = SETUP_TOO_LONG;
+        }
+        else if (ssid.length() == 0)
+        {
+            passwordReply = SETUP_CLEARED;
+            strcpy(wifi_password, password.c_str());
+        }
+        else
+        {
+            passwordReply = SETUP_SAVED;
+            strcpy(wifi_password, password.c_str());
+        }
+    }
+
+    if (blynkAuth.equals(String(blynk_auth)))
+    {
+        blynkAuthReply = SETUP_NO_CHANGE;
+    }
+    else
+    {
+        if (blynkAuth.length() != 32)
+        {
+            blynkAuthReply = SETUP_INCORRECT_LENGTH;
+        }
+        else
+        {
+            blynkAuthReply = SETUP_SAVED;
+            strcpy(blynk_auth, blynkAuth.c_str());
+        }
+    }
+
+    // Send captive portal web page in chunks
+    webServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    webServer->send(200, "text/html", FPSTR(captivePortalResponseHTML1));
+
+    switch (ssidReply)
+    {
+    case SETUP_TOO_LONG:
+        webServer->sendContent(FPSTR(setupReplyTooLong));
+        break;
+    case SETUP_CLEARED:
+        webServer->sendContent(FPSTR(setupReplyCleared));
+        resetWiFi = true;
+        break;
+    case SETUP_SAVED:
+        webServer->sendContent(FPSTR(setupReplySaved));
+        resetWiFi = true;
+        break;
+    case SETUP_NO_CHANGE:
+        webServer->sendContent(FPSTR(setupReplyNoChange));
+        break;
+    default:
+        break;
+    }
+
+    webServer->sendContent(FPSTR(captivePortalResponseHTML2));
+    if (wifi_ssid[0] != '\0') // prevent null value ending the transmission
+        webServer->sendContent(wifi_ssid);
+    webServer->sendContent(FPSTR(captivePortalResponseHTML3));
+
+    switch (passwordReply)
+    {
+    case SETUP_TOO_LONG:
+        webServer->sendContent(FPSTR(setupReplyTooLong));
+        break;
+    case SETUP_CLEARED:
+        webServer->sendContent(FPSTR(setupReplyCleared));
+        resetWiFi = true;
+        break;
+    case SETUP_SAVED:
+        webServer->sendContent(FPSTR(setupReplySaved));
+        resetWiFi = true;
+        break;
+    case SETUP_NO_CHANGE:
+        webServer->sendContent(FPSTR(setupReplyNoChange));
+        break;
+    default:
+        break;
+    }
+
+    webServer->sendContent(FPSTR(captivePortalResponseHTML4));
+    if (wifi_password[0] != '\0')
+        webServer->sendContent(wifi_password);
+    webServer->sendContent(FPSTR(captivePortalResponseHTML5));
+
+    switch (blynkAuthReply)
+    {
+    case SETUP_INCORRECT_LENGTH:
+        webServer->sendContent(FPSTR(setupReplyIncorrectLength));
+        break;
+    case SETUP_CLEARED:
+        webServer->sendContent(FPSTR(setupReplyCleared));
+        resetBlynk = true;
+        break;
+    case SETUP_SAVED:
+        webServer->sendContent(FPSTR(setupReplySaved));
+        resetBlynk = true;
+        break;
+    case SETUP_NO_CHANGE:
+        webServer->sendContent(FPSTR(setupReplyNoChange));
+        break;
+    default:
+        break;
+    }
+
+    webServer->sendContent(FPSTR(captivePortalResponseHTML6));
+    if (blynk_auth[0] != '\0')
+        webServer->sendContent(blynk_auth);
+    webServer->sendContent(FPSTR(captivePortalResponseHTML7));
+    webServer->sendContent(""); // an empty line finishes the transmission
+
+    // update the config file
+    saveConfig();
 }
