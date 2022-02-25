@@ -1,10 +1,12 @@
-# Fuzzy-Spooder
+## Fuzzy-Spooder
 An add-on filament estimator for existing 3D printers. It provides filament remaining weight, track printer status, and send notifications to your mobile device. A WiFi environment is required for most functions.
 
 ---
-## Getting Started
+### Getting Started
+
 <details>
-<summary>### Upload the Spooder Example</summary>
+
+<summary>Upload the Spooder Example</summary>
 
 
 #### Using Arduino IDE
@@ -73,7 +75,8 @@ This creates a more user friendly env:name, increases upload speed and enables s
 </details>
 
 <details>
-<summary>### Upload the data folder to the file system</summary>
+
+<summary>Upload the data folder to the file system</summary>
 
 The data folder contains all the files to be uploaded to the ESP8266 flash memory. Sketch(program) upload and data upload are independent operations.
 
@@ -108,7 +111,7 @@ For example, the data folder contains:
 </details>
 
 <details>
-<summary>### OTA Upload</summary>
+<summary>OTA Upload</summary>
 
 Once the OTA (over-the-air) codes are in place, and the device is connected to the local WiFi enviromnet, the ESP can be uploaded wirelessly.
 
@@ -149,16 +152,16 @@ After setting the OTA environment in the platformio.ini file, select the intende
 
 <details>
 
-<summary>### Hotspot Setup</summary>
+<summary>Hotspot Setup</summary>
 
 For a device that already has firmware and generic data folder uploaded, user can config the device without the compile/upload hassle. 
 
 - After power up, enter **Hotspot Setup** in the menu page. The Spooder will create a wifi hotspot named "Spooder_Setup".
 - Use your personal device (phone/tab/laptop/desktop...) to connect to this wifi hotspot.
 - Login page is auto-redirected. But sometimes it doesn't work. Use your browser and connect to this address: http://192.168.4.1
-- An login page should appear:
+- An login page like this should appear:
 
-![Spooder_Setup.jpg](/relative/extras/images/Spooder_Setup.jpg?raw=true "Spooder_Setup Screenshot")
+![Spooder_Setup.jpg](/extras/images/Spooder_Setup.jpg?raw=true "Spooder_Setup Screenshot")
 
 - Input the following information into Spooder
   - Your local WiFi SSID
@@ -173,9 +176,13 @@ Your Spooder then should be able to connect to your local WiFi environment.
 
 ---
 
-## Using the Spooder
+### Using the Spooder
 
-### UI Pages
+
+
+<details>
+
+<summary>UI Pages</summary>
 
 - **Spooder Home Page**:
   - Single click: Cycles the display mode:
@@ -184,15 +191,21 @@ Your Spooder then should be able to connect to your local WiFi environment.
     - Total weight: measured (spool holder + filament) weight.
 - **Info Page**:
   - Displays additional information
+    - Spooder ID
+    - Firmware version
+    - Calbration value
+    - WiFi SSID
+    - Spooder IP (if connected)
 - **Menu Page**: 
-  - Tare: Perform a tare manually. The current tare offset value is saved into EEPROM. A manual tare needs to bo done at least once with the spool removed.
-  - Calibrate: Perform a calibration. Calibrated value is saved into EEPROM. A calibration needs to be done at least once with known weight.
-  - Spool Holder Weight: Set spool holder weight, or load preset values. This is used for the filament weight estimation.
-  - Set Spooder ID: Set the spooder ID. An unique Spooder ID needs to be set for each spooder.
-  - Low Filament Setup: Adjust the threshold value for the low filament notification. Default value is 80 g.
-  - Notification: User option to enable or disable each notification type. 
-  - Firmware Update: Update firmware from github repository directly.
-  - Options: User enable/disable the following options:
+  - **Tare:** Perform a tare manually. The current tare offset value is saved into EEPROM. A manual tare needs to bo done at least once with the spool removed.
+  - **Calibrate:** Perform a calibration. Calibrated value is saved into EEPROM. A calibration needs to be done at least once with known weight.
+  - **Spool Holder Weight:** Set spool holder weight, or load preset values. This is used for the filament weight estimation.
+  - **Set Spooder ID:** Set the spooder ID. An unique Spooder ID needs to be set for each spooder.
+  - **Low Filament Setup:** Adjust the threshold value for the low filament notification. Default value is 80 g.
+  - **Notification:** User option to enable or disable each notification type. 
+  - **Hotspot Setup:** The device enters hotspot mode for user to input WiFi SSID/password, Blynk Auth Toke. All other network functions are disabled when entering this mode, and restored thereafter.
+  - **Firmware Update:** Update firmware from github repository directly.
+  - **Options:** User enable/disable the following options:
     - WiFi
     - mDNS
     - Blynk
@@ -201,9 +214,13 @@ Your Spooder then should be able to connect to your local WiFi environment.
     - Spooder server
     - Arduino OTA
     - Auto Homepage 
-  - Debug: Various debugging functions.
+  - **Debug:** Various debugging functions.
 
-#### Spool Holder Weight
+</details>
+
+<details>
+
+<summary>Spool Holder Weight</summary>
 
 Spool holder weight is a user input value in grams. This weight is used to estimate remaining filament weight. The default spool holder weight can be 
 - Adjusted in the spooder UI. 
@@ -211,16 +228,33 @@ Spool holder weight is a user input value in grams. This weight is used to estim
 
 There are additional slots (up to 32 maximum) of preset spool holders, each with its name and weight. They are defined in the `\data\config.json` file. These preset spool holders can be selected in the spooder UI.
 
-#### Network Functions
+</details>
+
+<details>
+
+<summary>Network Functions</summary>
+
 To enable the network functions, user needs to provide wifi ssid/password, and Blynk Authorization Token in the config.json file. Install the Blynk app on your tab/phone. The browser file manager works locally, but the Blynk Notification works globally. Which means, your phone doesn't have to be in your local wifi network to receive notifications.
 
-#### Spooder ID and mDNS
+
+</details>
+
+<details>
+
+<summary>Spooder ID and mDNS</summary>
 
 The user needs to set an unique Spooder ID in the UI for each unit. The ID consists of a letter (from A to Z) and a number (from 1 to 99). For example, A1, B13, C3, etc... 
 
 The unit's [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) hostname is prefixed with "spooder". For example, spooderA1, spooderB13, spooderC3, etc... The spooder can be accessed simply using "**spooderA1.local**", "**spooderB13.local**", etc. Note that the mDNS hostname is case-insensitive, which means "**SPOODERA1.LOCAL**" also works. If the mDNS isn't availble, IP address can always be used.
 
-#### Notification
+
+</details>
+
+<details>
+
+<summary>Notification</summary>
+
+The nofification is sent from the Spooder device to your cell phone through the [Blynk App](https://docs.blynk.cc/). Refer to the lower part of this readme for further information about Blynk. 
 
 There are several conditions that will trigger the notification:
 
@@ -231,9 +265,12 @@ There are several conditions that will trigger the notification:
 
 User has the option to enable or disable each notification type in the UI **Notification** page. These options are stored in EEPROM and enabled by default.
 
-The nofification is sent through the [Blynk App](https://docs.blynk.cc/).
+</details>
 
-#### Firmware Update from Github
+<details>
+
+<summary>Firmware Update from Github</summary>
+
 
 Each spooder can update its own firmware over-the-air from this [github repository](https://github.com/FuzzyNoodle/Fuzzy-Spooder) manually or automatically, provided that the device is connected to the internet through WiFi. Current onboard version and latest version on github are displayed on the **Firmware Update** page. 
 
@@ -242,17 +279,30 @@ Manual **Check Now**, and manual **Update Now** can be performed anytime. The ve
 If the **Auto Update** option is set to **On**, the device will check the latest github release periodically, and will update the firmware if there is a newer version.  Due to the github api [60 requests per hour rate limit](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting), the interval between automatic version checks is set between 60 to 120 minutes. Automatic update is inhibited for 10 minutes if any filament movements are detected. The next check interval is also extended right after a successful automatic firmware update.
 
 
-#### Browser File Manager
+</details>
+
+<details>
+
+<summary>Browser File Manager</summary>
+
 
 After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
 Files can be uploaded, downloaded, or edited (for example, config.json) directly from the web browser.
 
+</details>
+
 ---
 
 ### Additional Information
 
-#### Bonjour Browser
+</details>
+
+<details>
+
+<summary>Bonjour Browser</summary>
+
+
 
 The following apps can be used to browse active **spooders** (and other mDNS devices) in your local network. 
 - [Bonjour Browser](https://play.google.com/store/apps/details?id=de.wellenvogel.bonjourbrowser) for Android
@@ -261,7 +311,12 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 - [Discovery - DNS-SD Browser](https://apps.apple.com/us/app/discovery-dns-sd-browser/id305441017) for iOS
 
 
-#### Installing Blynk App for Push Notification 
+</details>
+
+<details>
+
+<summary>Installing Blynk App for Push Notification</summary>
+
 (free for limited Widget usage)
 1. Install "Blynk (legacy)" App (iOS or Android)
 2. Register a Blynk account
@@ -269,7 +324,7 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
   - Name: ex. "Spooder"
   - Device: "ESP8266"
   - Connection Type: "WiFi"
-4. An unique Authorization Token (per project) will be sent to your registered email. The code needs to be copied into the config.json under \data folder.   
+4. An unique Authorization Token (per project) will be sent to your registered email. The token needs to be copied into the config.json under \data folder. It can also be entered using the **Hotspot Setup** method.  
 5. Touch the design screen, a Widgex Box appear. Place a "Notification $400" widget.
 6. Press "Play" icon on the top right corner. Done. App doesn't need to be active for the notification to work.
 
