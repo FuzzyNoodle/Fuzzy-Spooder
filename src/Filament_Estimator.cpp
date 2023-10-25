@@ -163,6 +163,9 @@ void FILAMENT_ESTIMATOR::begin(const char *ssid, const char *password, const cha
     Serial.print(currentVersion.patch);
     Serial.println();
 
+    // RAM management
+    printingStatusString.reserve(32);
+
     // Setup for OLED
     display.init();
     display.flipScreenVertically();
@@ -712,7 +715,7 @@ void FILAMENT_ESTIMATOR::connectSpooderServer(uint8_t serverIndex)
         serverPort, "/");
     if (connected)
     {
-        Serial.println("Connecetd!");
+        Serial.println(F("Connecetd!"));
 
         // run callback when messages are received
         webSocketsClient.onMessage(globalHandleWebsocketsMessage);
@@ -720,9 +723,8 @@ void FILAMENT_ESTIMATOR::connectSpooderServer(uint8_t serverIndex)
     }
     else
     {
-        Serial.println("Not Connected!");
+        Serial.println(F("Not Connected!"));
     }
-    serverConnectionStatus[0] = connected ? CONNECTED : NOT_CONNECTED;
 }
 void FILAMENT_ESTIMATOR::handleWebsocketsMessage(WebsocketsClient &client, WebsocketsMessage message)
 {
@@ -833,8 +835,8 @@ void FILAMENT_ESTIMATOR::updateSpooderServer()
 void FILAMENT_ESTIMATOR::updateSpooderClient()
 {
     // Perform looped tasks
-
     updateWebsocketsClient();
+    checkSpooderServerFromClient();
 
     // Perform periodic tasks
     if (millis() - updateSpooderClientTimer < UPDATE_SPOODER_CLIENT_PEROID)
@@ -925,6 +927,28 @@ void FILAMENT_ESTIMATOR::beginServices()
     // Serial.println(F("NTP started."));
 
     Serial.println(F("Services started."));
+
+    // IPAddress addr;
+
+    // addr = WiFi.gatewayIP();
+
+    Pings.on(true, [](const AsyncPingResponse &response)
+             {
+        IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+        if (response.answer)
+          Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
+        else
+          Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
+        return false; });
+
+    Pings.on(false, [](const AsyncPingResponse &response)
+             {
+        IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+        Serial.printf("total answer from %s sent %d recevied %d time %d ms\n",addr.toString().c_str(),response.total_sent,response.total_recv,response.total_time);
+        return true; });
+
+    // Serial.printf("started ping to %s:\n", addr.toString().c_str());
+    // Pings.begin(addr, 1, 1);
 }
 void FILAMENT_ESTIMATOR::setMDNS(bool value)
 {
@@ -1085,7 +1109,7 @@ int8_t FILAMENT_ESTIMATOR::getFreeClientIndex()
 }
 void FILAMENT_ESTIMATOR::MDNSServiceQueryCallback(MDNSResponder::MDNSServiceInfo *serviceInfo, MDNSResponder::AnswerType answerType, bool p_bSetContent)
 {
-    listMDNSDynamicQueryAnswer();
+    // listMDNSDynamicQueryAnswer();
     return;
     // Not printing out answers
     /*
@@ -1272,28 +1296,93 @@ void FILAMENT_ESTIMATOR::listMDNSDynamicQueryAnswer()
         {
             for (int i = 0; i < numAns; i++)
             {
-                if (isAnswerValidServer(i) == true)
-                {
-                    // Print details for each service found
-                    Serial.print(F("Valid server at index "));
-                    Serial.print(i);
-                    Serial.print(": ");
-                    Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
-                    Serial.print(" (");
-                    Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); // only list the first(index==0) ip
-                    Serial.print(":");
-                    Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
-                    Serial.print(")");
+                // Print details for each service found
+                Serial.print(F("Valid server at index "));
+                Serial.print(i);
+                Serial.print(": ");
+                Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
+                Serial.print(" (");
+                Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); // only list the first(index==0) ip
+                Serial.print(":");
+                Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
+                Serial.print(")");
 
-                    Serial.println();
-                }
-                else
-                {
-                    // Serial.print(F("Invalid :"));
-                }
+                Serial.println();
+                /*
+                if (isAnswerValidServer(i) == true)
+            {
+                // Print details for each service found
+                Serial.print(F("Valid server at index "));
+                Serial.print(i);
+                Serial.print(": ");
+                Serial.print(MDNS.answerHostDomain(hMDNSServiceQuery, i));
+                Serial.print(" (");
+                Serial.print(MDNS.answerIP4Address(hMDNSServiceQuery, i, 0)); // only list the first(index==0) ip
+                Serial.print(":");
+                Serial.print(MDNS.answerPort(hMDNSServiceQuery, i));
+                Serial.print(")");
+
+                Serial.println();
+            }
+            else
+            {
+                // Serial.print(F("Invalid :"));
+            }
+                */
             }
         }
     }
+}
+void FILAMENT_ESTIMATOR::checkSpooderServerFromClient()
+{
+    if (millis() - checkSpooderServerFromClientTimer < CHECK_SPOODER_SERVER_FROM_CLIENT_PERIOD)
+        return;
+
+#ifdef DEBUG_SPOODER_SERVER
+    Serial.println(F("Checking spooder server status:"));
+#endif
+    uint32_t numAns = MDNS.answerCount(hMDNSServiceQuery);
+    if (numAns > 0)
+    {
+        for (uint8_t index = 0; index < MAX_NUM_OF_SPOODER_SERVERS; index++)
+        {
+            // check if answer is valid
+            if (index < numAns)
+            {
+                serverIsValid[index] = isAnswerValidServer(index);
+
+                // send async ping to valid servers
+                if (serverIsValid[index] == true)
+                {
+                    IPAddress addr;
+                    addr = WiFi.gatewayIP();
+                    Serial.printf("Started ping to %s:\n", addr.toString().c_str());
+                    Pings.begin(addr);
+                }
+            }
+            else
+            {
+                // clear other flags
+                serverIsValid[index] = false;
+            }
+        }
+#ifdef DEBUG_SPOODER_SERVER
+        Serial.print(numAns);
+        Serial.println(F(" answer(s) found."));
+        Serial.print(F("Valid:"));
+        for (uint8_t index = 0; index < MAX_NUM_OF_SPOODER_SERVERS; index++)
+        {
+            Serial.print(serverIsValid[index] ? "1" : "0");
+        }
+        Serial.println();
+#endif
+    }
+
+#ifdef DEBUG_SPOODER_SERVER
+    Serial.println(F("Checking spooder server completed."));
+#endif
+
+    checkSpooderServerFromClientTimer = millis();
 }
 void FILAMENT_ESTIMATOR::updateServiceTxt()
 {
@@ -3270,7 +3359,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "Spool Holder Weight");
+        display.drawString(display.getWidth() / 2, 0, "Spool Holder");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.setFont(ArialMT_Plain_16);
@@ -3468,7 +3557,7 @@ void FILAMENT_ESTIMATOR::displayPage(uint8_t page)
         display.clear();
         display.setFont(ArialMT_Plain_10);
         display.setTextAlignment(TEXT_ALIGN_CENTER);
-        display.drawString(display.getWidth() / 2, 0, "Low Filament Setup");
+        display.drawString(display.getWidth() / 2, 0, "Low Filament");
         display.drawRect(0, 12, 128, 1);
         display.setTextAlignment(TEXT_ALIGN_LEFT);
         display.drawString(6, 12, "Set filament threshold weight");
@@ -3806,12 +3895,50 @@ void FILAMENT_ESTIMATOR::drawSymbols()
         display.setTextAlignment(TEXT_ALIGN_LEFT);
 
         display.fillRect(104 + 1, 1 + 1, 11 - 2, 10 - 1);
-        display.drawHorizontalLine(104 + 2, 1, 7);
-        display.drawVerticalLine(104, 3, 7);
-        display.drawVerticalLine(104 + 10, 3, 7);
+        display.drawHorizontalLine(104 + 2, 1 + 0, 7);
+        display.drawVerticalLine(104, 1 + 2, 7);
+        display.drawVerticalLine(104 + 10, 1 + 2, 7);
         display.setColor(BLACK);
-        display.drawString(106, 0, "B");
+        display.drawString(104 + 2, 1 - 1, "B");
         display.setColor(WHITE);
+    }
+    // Spooder server/client status
+    if (enableSpooderServer == true)
+    {
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.fillRect(0 + 1, 1 + 1, 11 - 2, 10 - 1);
+        display.drawHorizontalLine(0 + 2, 1 + 0, 7);
+        display.drawVerticalLine(0, 1 + 2, 7);
+        display.drawVerticalLine(0 + 10, 1 + 2, 7);
+        display.setColor(BLACK);
+        display.drawString(0 + 2, 1 - 1, "S");
+        display.setColor(WHITE);
+    }
+    if (enableSpooderClient == true)
+    {
+        display.setFont(ArialMT_Plain_10);
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+        if (connectedToSpooderServer == false)
+        {
+            // client enabled, but not connected to a spooder server
+            // display.drawRect(12 + 1, 1 + 1, 11 - 2, 10 - 1);
+            // display.drawHorizontalLine(12 + 2, 1, 7);
+            // display.drawVerticalLine(12, 1+2, 7);
+            // display.drawVerticalLine(12 + 10, 1+2, 7);
+            display.drawString(12 + 2, 1 - 1, "C");
+        }
+        else
+        { // client enabled, and connected to a spooder server
+            display.fillRect(12 + 1, 1 + 1, 11 - 2, 10 - 1);
+            display.drawHorizontalLine(12 + 2, 1, 7);
+            display.drawVerticalLine(12, 1 + 2, 7);
+            display.drawVerticalLine(12 + 10, 1 + 2, 7);
+            display.setColor(BLACK);
+            display.drawString(12 + 2, 1 - 1, "C");
+            display.setColor(WHITE);
+        }
     }
 }
 void FILAMENT_ESTIMATOR::tare()
@@ -3828,7 +3955,10 @@ void FILAMENT_ESTIMATOR::tare()
     saveToEEPROM();
     printingStatus = STATUS_IDLE;
     printingStatusString = "STATUS_IDLE";
+#ifdef DEBUG_STATUS
     Serial.println(F("Status changed to STATUS_IDLE after tare."));
+#endif
+
     purgeCounter = 3; // purge array after few samples
 }
 void FILAMENT_ESTIMATOR::calibrate()
@@ -5144,7 +5274,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
         {
             printingStatus = STATUS_EMPTY;
             printingStatusString = "STATUS_EMPTY";
+#ifdef DEBUG_STATUS
             Serial.println(F("Status changed from STATUS_BOOT to STATUS_EMPTY."));
+#endif
+
             purgeCounter = 3; // purge array
             if (isLogging == true)
             {
@@ -5162,7 +5295,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
                 // Do not change state during purge counting
                 printingStatus = STATUS_IDLE;
                 printingStatusString = "STATUS_IDLE";
+#ifdef DEBUG_STATUS
                 Serial.println(F("Status changed from STATUS_BOOT to STATUS_IDLE."));
+#endif
+
                 purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
@@ -5183,7 +5319,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
                 // Do not change state during purge counting
                 printingStatus = STATUS_IDLE;
                 printingStatusString = "STATUS_IDLE";
+#ifdef DEBUG_STATUS
                 Serial.println(F("Status changed from STATUS_EMPTY to STATUS_IDLE."));
+#endif
+
                 purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
@@ -5204,7 +5343,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
                 // Do not change state during purge counting
                 printingStatus = STATUS_EMPTY;
                 printingStatusString = "STATUS_EMPTY";
+#ifdef DEBUG_STATUS
                 Serial.println(F("Status changed from STATUS_IDLE to STATUS_EMPTY."));
+#endif
+
                 purgeCounter = 3; // purge array after few samples
                 if (isLogging == true)
                 {
@@ -5229,7 +5371,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
 
             printingStatus = STATUS_PRINTING;
             printingStatusString = "STATUS_PRINTING";
+#ifdef DEBUG_STATUS
             Serial.println(F("Status changed from STATUS_IDLE to STATUS_PRINTING."));
+#endif
+
             if (setting.notifyOnPrintStarted)
             {
                 notify(NOTIFICATION_PRINT_STARTED);
@@ -5254,7 +5399,10 @@ void FILAMENT_ESTIMATOR::updateDetection()
             // print job completed
             printingStatus = STATUS_IDLE;
             printingStatusString = "STATUS_IDLE";
+#ifdef DEBUG_STATUS
             Serial.println(F("Status changed from STATUS_PRINTING to STATUS_IDLE."));
+#endif
+
             if (setting.notifyOnPrintCompleted)
             {
                 notify(NOTIFICATION_PRINT_COMPLETED);
