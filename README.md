@@ -286,7 +286,7 @@ If the **Auto Update** option is set to **On**, the device will check the latest
 <summary>Browser File Manager</summary>
 
 
-After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
+After configuring wifi, the spooder file system can be accessed using a web browser. Type for example, http://spooderA1.local/edit in the URL of your browser. If the device name cannot be found, try http://spooderA1/edit or http://192.168.xx.xx/edit instead, where the device's ip address can be found on the Spooder INFO page. This function is directly imported from the excellent [FSBrowser example](https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/examples/FSBrowser) by Hristo Gochkov.
 
 Files can be uploaded, downloaded, or edited (for example, config.json) directly from the web browser.
 
@@ -328,9 +328,10 @@ The following apps can be used to browse active **spooders** (and other mDNS dev
 5. Touch the design screen, a Widgex Box appear. Place a "Notification $400" widget.
 6. Press "Play" icon on the top right corner. Done. App doesn't need to be active for the notification to work.
 
-[Limitations:](https://github.com/blynkkk/blynkkk.github.io/blob/master/Widgets.md)
-
-- Maximum allowed body length is 120 symbols;
+[Blynk Limitations:]
+(https://docs.blynk.io/en/blynk.console/limits)
+- Max number of events per day per device (Blynk.logEvent): 100 events
+- Min interval between events of the same type: 1 second
 - Every device can send only 1 notification every 5 seconds;
 
 
