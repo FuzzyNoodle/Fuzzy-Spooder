@@ -291,3 +291,4 @@ library.json
 # Personal Develop Files
 config.json
 extras/ignored/
+examples/Spooder/Spooder.cpp

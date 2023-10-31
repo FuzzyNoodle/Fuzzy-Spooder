@@ -18,10 +18,8 @@
 
 // Debug switches
 #define BLYNK_PRINT Serial // Defines the object that is used for printing
-// #define BLYNK_DEBUG        // Optional, this enables more detailed prints
+//#define BLYNK_DEBUG        // Optional, this enables more detailed prints
 #define BLYNK_NO_FANCY_LOGO
-// #define DEBUG_STATUS //output printer status changes
-#define DEBUG_SPOODER_SERVER // output spooder server status from client side
 
 // Rotary library
 #include "ESPRotary.h"
@@ -41,14 +39,14 @@
 // Include the HX711 library
 #include "HX711_ADC.h"
 #include <EEPROM.h>
-// #include <ESP_EEPROM.h>   //use this library to extend life
+//#include <ESP_EEPROM.h>   //use this library to extend life
 #define HX711_DOUT_PIN D5 // mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  // mcu > HX711 sck pin
 
 // Network time function
 #include <TZ.h>
 #define MYTZ TZ_Asia_Taipei
-// #define MYTZ TZ_America_Los_Angeles
+//#define MYTZ TZ_America_Los_Angeles
 
 // File system
 #include <ArduinoJson.h>
@@ -166,8 +164,8 @@
 // mDNS and communication between devices
 #define MDNS_SERVICE_TXT_MAXLENGTH 100
 #include <ESP8266mDNS.h>
-#define MAX_NUM_OF_SPOODERS 64        // fix RAM is allocated
-#define MAX_NUM_OF_SPOODER_SERVERS 16 // in a local network. more than 20 causes OOM using dynamic mDNS
+#define MAX_NUM_OF_SPOODERS 64       // fix RAM is allocated
+#define MAX_NUM_OF_SPOODER_SERVERS 3 // in a local network. more than 20 causes OOM using dynamic mDNS
 #define DATASET_SPOODER_ID_SIZE 4
 // Has to be global due to sort callback
 struct SPOODERS_DATASET_STRUCT
@@ -175,11 +173,10 @@ struct SPOODERS_DATASET_STRUCT
   char spooderID[DATASET_SPOODER_ID_SIZE]; // A1, B12, ...
   int16_t fw;                              // filament weight in gram //2 bytes
 };
-// #include <WiFiUdp.h>
-// #define UDP_PACKET_SIZE_LIMIT 32
+//#include <WiFiUdp.h>
+//#define UDP_PACKET_SIZE_LIMIT 32
 #include <ArduinoWebsockets.h>
 using namespace websockets;
-#include "AsyncPing.h"
 
 // Github auto update
 #define NO_GLOBAL_HTTPUPDATE // use local instance to free up RAM
@@ -278,7 +275,6 @@ private:
   bool enableBlynk = false;
   bool enableWebServer = false;
   bool enableSpooderClient = false;
-  bool connectedToSpooderServer = false;
   bool enableSpooderServer = false;
   bool enableArduinoOTA = false;
   bool enableNetworkTime = true;
@@ -326,18 +322,24 @@ private:
   int8_t getFreeClientIndex();
   bool isAnswerValidServer(uint8_t index);
   void connectSpooderServer(uint8_t index);
-  bool serverIsValid[MAX_NUM_OF_SPOODER_SERVERS];
+  enum SERVER_VALID_STATUS
+  {
+    INVALID,
+    VALID,
+  };
+  SERVER_VALID_STATUS serverValidStatus[MAX_NUM_OF_SPOODER_SERVERS] = {};
+  enum SERVER_CONNECTION_STATUS
+  {
+    NOT_CONNECTED,
+    CONNECTED,
+  };
+  SERVER_CONNECTION_STATUS serverConnectionStatus[MAX_NUM_OF_SPOODER_SERVERS] = {};
   uint32_t updateSpooderClientTimer;
   const uint32_t UPDATE_SPOODER_CLIENT_PEROID = 3000;
   void updateSpooderClient();
   uint32_t updateSpooderServerStatusTimer;
   const uint32_t UPDATE_SPOODER_SERVER_STATUS_PEROID = 3000;
   void updateSpooderServer();
-  // Periodically check server status from client side.
-  void checkSpooderServerFromClient();
-  uint32_t checkSpooderServerFromClientTimer;
-  const uint32_t CHECK_SPOODER_SERVER_FROM_CLIENT_PERIOD = 20000;
-  AsyncPing Pings;
 
   bool netWorkTimeReceived = false;
   void updateNetworkTime();
@@ -720,7 +722,7 @@ private:
     STATUS_PRINTING,
     STATUS_
   } printingStatus;
-  String printingStatusString; // 32 bytes, need to reserve for RAM usage
+  String printingStatusString;
   bool detectionDebugOutput = false;
   float getSum(uint16_t samples);
   float getMean(uint16_t samples);         // retern mean of the latest number of samples
@@ -844,4 +846,4 @@ private:
   bool resetBlynk = false;
 };
 
-#endif // #ifndef FILAMENT_ESTIMATOR_H
+#endif //#ifndef FILAMENT_ESTIMATOR_H
