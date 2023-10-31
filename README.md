@@ -1,6 +1,9 @@
 ## Fuzzy-Spooder
 An add-on filament estimator for existing 3D printers. It provides filament remaining weight, track printer status, and send notifications to your mobile device. A WiFi environment is required for most functions.
 
+
+Known bug: blynk (legacy) does not work.
+
 ---
 ### Getting Started
 
@@ -13,18 +16,20 @@ An add-on filament estimator for existing 3D printers. It provides filament rema
 
 1. [Install](https://arduino-esp8266.readthedocs.io/en/latest/installing.html) the ESP8266 Arduino Core.
 2. Follow this [tutorial](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) to install the file system uploader, but use [this LittleFS plugin](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin) instead of SPIFFS. 
-3. ```Arduino IDE->Tools->Board->ESP8266 Boards```, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate. 
+3. ```Arduino IDE->Tools->Board->ESP8266 Boards```, select NodeMCU 1.0 (ESP-12 Module). You may change the **Upload Speed** to higher baud rate (ex: 921600). 
 4. Install the [Fuzzy Spooder](https://github.com/FuzzyNoodle/Fuzzy-Spooder) using the the [Arduino Library Manager](https://www.arduino.cc/en/guide/libraries#toc3). 
-5. Starting with IDE v1.8.10, the following library dependencies will be prompted to install: (If not being prompted, please install them maually.)
-    1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.4.2
-    2. [Button2](https://github.com/LennartHennigs/Button2) by Lennart Hennigs, version 1.6.1
+5. Starting with IDE v1.8.10, the following library dependencies, with exact version, will be prompted to install: (If not being prompted, please install them maually.)
+    1. [ESP Rotary](https://github.com/LennartHennigs/ESPRotary) by Lennart Hennigs, version 1.6.0
+    2. [Button2](https://github.com/LennartHennigs/Button2) by Lennart Hennigs, version 1.6.5
     3. [Blynk](https://github.com/blynkkk/blynk-library) by Volodymyr Shymanskyy, version 0.6.1
-    4. [ESP8266 and ESP32 OLED driver for SSD1306 displays](https://github.com/ThingPulse/esp8266-oled-ssd1306) by ThingPulse, Fabrice Weinberg, version 4.2.0
-    5. [HX711_ADC](https://github.com/olkal/HX711_ADC) by Oolav Kallhovd, version 1.2.7
-    6. [ArduinoJson](https://github.com/bblanchon/ArduinoJson) by Benoit Blanchon, version 6.17.3
+    4. [ESP8266 and ESP32 OLED driver for SSD1306 displays](https://github.com/ThingPulse/esp8266-oled-ssd1306) by ThingPulse, Fabrice Weinberg, version 4.2.1
+    5. [HX711_ADC](https://github.com/olkal/HX711_ADC) by Oolav Kallhovd, version 1.2.12
+    6. [ArduinoJson](https://github.com/bblanchon/ArduinoJson) by Benoit Blanchon, version 6.18.3
+    7. [ArduinoWebsockets](https://github.com/gilmaimon/ArduinoWebsockets) by Gil Maimon, version 0.5.3
+    
+    Exact versions of the dependent libraries are strongly recommended, since some newer versions had break the code. If the sketch cannot be compilied, manually check the versions of each libraries installed in your arduino IDE, and upgrade/downgrade them as required.
 
-
-6. Open the ```File->Examples->Fuzzy Spooder->Spooder``` sketch and upload to your board via USB connection. Correct port needs to be selected.
+6. Open the ```File->Examples->Fuzzy Spooder->Spooder``` sketch and upload to your board via USB connection. Correct port needs to be selected. This example only appears if the board has been selected correctly in step 3.
 7. [Upload](https://randomnerdtutorials.com/install-esp8266-filesystem-uploader-arduino-ide/) the data files in the \data folder too. See below.
 
 #### Using VSCode IDE + platformio extension
@@ -35,10 +40,11 @@ An add-on filament estimator for existing 3D printers. It provides filament rema
     3. Framework: **Arduino**
 2. ```PIO Home->Libraries->Search``` and go to **"Fuzzy Spooder"**.
 3. Add to Project -> Select the project you just created. (ex. ```Projects\Spooder```). The library dependencies should be automataclly downloaded and installed.
-4. On the same page, select and copy all the sketch code from the Spooder 
+4. In the **Examples** tab, select and copy all the sketch code from the "Spooder" example.
 5. Open ```VSCode->Explorer(Left/Top Icon)->[Your Project Name]->src->main.cpp```. Paste and overwrite the example sketch code copied from previous step.
-6. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
-7. [Upload](https://diyprojects.io/esp8266-upload-data-folder-spiffs-littlefs-platformio) the data files in the \data folder too. See below.
+6. Modify the platformio.ini configuration file. See notes below.
+7. Upload the program(The right arrow located at the bottom toolbar) via USB connection. Upload port should be auto-detected.
+8. [Upload](https://diyprojects.io/esp8266-upload-data-folder-spiffs-littlefs-platformio) the data files in the \data folder too. See below.
 
 Additional note:
 The default platformio.ini configuration would be something like:
@@ -53,7 +59,7 @@ lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 
 Modify the configuration section to:
 ```
-[env:Spooder Example - USB Serial]
+[env:Spooder_Example_USB_Serial]
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
@@ -105,7 +111,7 @@ For example, the data folder contains:
   - library (ex: ```platformio_project_folder\.pio\libdeps\Spooder\Fuzzy_Spooder```) to your 
   - project folder (ex: ```platformio_project_folder\Spooder```).
 2. Edit the config.json file in the data folder as required. 
-3. Use the ```PlatformIO->PROJECT TASKS->Spooder->Platform->Upload Filesystem Image``` command to uplod the file image. Make SURE you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
+3. Use the ```PlatformIO->PROJECT TASKS->Spooder->Platform->Upload Filesystem Image``` command to uplod the file image. Make sure you have the ```board_build.filesystem = littlefs``` configurtion setting in the platformio.ini file.
 
 
 </details>
@@ -129,7 +135,7 @@ Add two lines in your platformio.ini:
 Creating a [env] is recommended. The whole section would look like this:
 
 ```
-[env:Spooder Example - OTA]
+[env:Spooder_Example_OTA]
 platform = espressif8266
 board = nodemcuv2
 framework = arduino
@@ -141,7 +147,7 @@ monitor_speed = 115200
 upload_speed = 921600
 monitor_filters = send_on_enter
 upload_protocol = espota
-;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved
+;upload_port = 192.168.0.133  ;use ip address if the mDNS hostname is not resolved, replace with your device's ip address
 upload_port = spooderA1.local ;using mDNS, replace with actual name
 lib_deps = georgychen/Fuzzy Spooder@^1.0.0
 ```

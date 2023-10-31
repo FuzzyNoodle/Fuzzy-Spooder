@@ -10,7 +10,7 @@
 #define FILAMENT_ESTIMATOR_H
 
 // Version for this firmware
-#define CURRENT_VERSION "1.1.0"
+#define CURRENT_VERSION "1.1.1"
 
 #include "Arduino.h"
 #include <stdio.h>
@@ -18,7 +18,7 @@
 
 // Debug switches
 #define BLYNK_PRINT Serial // Defines the object that is used for printing
-//#define BLYNK_DEBUG        // Optional, this enables more detailed prints
+// #define BLYNK_DEBUG        // Optional, this enables more detailed prints
 #define BLYNK_NO_FANCY_LOGO
 
 // Rotary library
@@ -39,14 +39,14 @@
 // Include the HX711 library
 #include "HX711_ADC.h"
 #include <EEPROM.h>
-//#include <ESP_EEPROM.h>   //use this library to extend life
+// #include <ESP_EEPROM.h>   //use this library to extend life
 #define HX711_DOUT_PIN D5 // mcu > HX711 dout pin
 #define HX711_SCK_PIN D6  // mcu > HX711 sck pin
 
 // Network time function
 #include <TZ.h>
 #define MYTZ TZ_Asia_Taipei
-//#define MYTZ TZ_America_Los_Angeles
+// #define MYTZ TZ_America_Los_Angeles
 
 // File system
 #include <ArduinoJson.h>
@@ -173,8 +173,8 @@ struct SPOODERS_DATASET_STRUCT
   char spooderID[DATASET_SPOODER_ID_SIZE]; // A1, B12, ...
   int16_t fw;                              // filament weight in gram //2 bytes
 };
-//#include <WiFiUdp.h>
-//#define UDP_PACKET_SIZE_LIMIT 32
+// #include <WiFiUdp.h>
+// #define UDP_PACKET_SIZE_LIMIT 32
 #include <ArduinoWebsockets.h>
 using namespace websockets;
 
@@ -846,4 +846,4 @@ private:
   bool resetBlynk = false;
 };
 
-#endif //#ifndef FILAMENT_ESTIMATOR_H
+#endif // #ifndef FILAMENT_ESTIMATOR_H
